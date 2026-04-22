@@ -11,7 +11,7 @@ export function UserMessageBubble({ children, className }: UserMessageBubbleProp
     <div className="flex justify-end">
       <div
         className={cn(
-          "bg-primary text-primary-foreground rounded-2xl px-4 py-3 sm:px-5 shadow-sm max-w-[min(85%,20rem)] sm:max-w-[min(75%,28rem)]",
+          "bg-primary text-primary-foreground rounded-2xl rounded-tr-none px-4 py-3 sm:px-5 shadow-sm max-w-[min(85%,20rem)] sm:max-w-[min(75%,28rem)]",
           className
         )}
       >

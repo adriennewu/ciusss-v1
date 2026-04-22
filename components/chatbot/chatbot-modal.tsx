@@ -1058,7 +1058,7 @@ export function ChatbotModal({
   }
 
   return (
-    <div className="flex h-[min(94dvh,calc(100dvh-2rem))] w-full min-w-0 max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl sm:h-[min(96dvh,calc(100dvh-3rem))] sm:rounded-2xl">
+    <div className="flex h-[100dvh] min-h-0 w-full max-w-none flex-col overflow-hidden rounded-none border-0 bg-background shadow-none md:h-[min(96dvh,calc(100dvh-3rem))] md:max-w-4xl md:rounded-2xl md:border md:border-border md:shadow-2xl">
       <ChatHeader
         locale={locale}
         onLocaleChange={onLocaleChange}
@@ -1071,7 +1071,7 @@ export function ChatbotModal({
 
       <div
         ref={scrollAreaRef}
-        className="flex-1 overflow-y-auto px-4 pt-4 pb-4 sm:px-5 sm:pt-5 sm:pb-4 min-h-0"
+        className="flex-1 overflow-y-auto px-4 pt-4 pb-4 min-h-0 md:px-5 md:pt-5 md:pb-4"
       >
         <div ref={messagesColumnRef} className="flex min-h-full flex-col gap-4">
           <AssistantMessageCard
@@ -1135,7 +1135,7 @@ export function ChatbotModal({
 
       <div
         className={cn(
-          "border-t border-border px-4 pb-4 sm:px-5 bg-background shrink-0",
+          "border-t border-border bg-background shrink-0 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-5 md:pb-4",
           isRecording || isVoiceTranscribing ? "pt-3" : "pt-4"
         )}
       >

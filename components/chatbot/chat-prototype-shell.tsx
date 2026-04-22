@@ -65,7 +65,9 @@ export function ChatPrototypeShell({
     <>
       <div
         className={cn(
-          "flex w-full min-w-0 max-w-4xl flex-col",
+          "flex w-full min-w-0 flex-col",
+          isChatOpen &&
+            "fixed inset-0 z-40 h-[100dvh] max-w-none md:static md:inset-auto md:z-auto md:h-auto md:max-w-4xl",
           !isChatOpen && "hidden",
         )}
       >

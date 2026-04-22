@@ -71,69 +71,100 @@ export function MessageReadAloudV2({
     )
   }
 
-  return (
-    <div
-      className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-2.5"
-      role="group"
-      aria-label={isPlaying ? labels.pause : labels.play}
+  const ariaLabel = isPlaying ? labels.pause : labels.play
+
+  const renderStopButton = () => (
+    <button
+      type="button"
+      onClick={onStop}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[14px] border border-destructive/35 bg-destructive/15 px-2.5 text-sm font-medium text-destructive",
+        "transition-colors hover:bg-destructive/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+      )}
     >
-      <button
+      <X className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
+      {labels.stop}
+    </button>
+  )
+
+  const renderPlayPauseButton = () =>
+    isPlaying ? (
+      <Button
         type="button"
-        onClick={onStop}
-        className={cn(
-          "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[14px] border border-destructive/35 bg-destructive/15 px-2.5 text-sm font-medium text-destructive",
-          "transition-colors hover:bg-destructive/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
-        )}
+        variant="primaryMuted"
+        onClick={onPause}
+        className="h-9 shrink-0 gap-1.5 rounded-[14px] px-2.5"
       >
-        <X className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
-        {labels.stop}
-      </button>
+        <Pause className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
+        {labels.pause}
+      </Button>
+    ) : (
+      <Button
+        type="button"
+        variant="primaryMuted"
+        onClick={onResume}
+        className="h-9 shrink-0 gap-1.5 rounded-[14px] px-2.5"
+      >
+        <Play className="h-4 w-4 shrink-0 pl-0.5" strokeWidth={2.25} aria-hidden />
+        {labels.play}
+      </Button>
+    )
 
-      <WaveSpeaker active={isPlaying} />
-
-      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-none">
+  const renderProgressSection = () => (
+    <div className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-none">
+      <div
+        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(p * 100)}
+      >
         <div
-          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(p * 100)}
-        >
-          <div
-            className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
-            style={{ width: `${p * 100}%` }}
-          />
+          className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+          style={{ width: `${p * 100}%` }}
+        />
+      </div>
+    </div>
+  )
+
+  const renderTimer = () => (
+    <span
+      className="shrink-0 tabular-nums text-xs font-medium text-muted-foreground sm:text-sm"
+      aria-live="polite"
+    >
+      {remainingClock}
+    </span>
+  )
+
+  return (
+    <>
+      <div
+        className="flex w-full min-w-0 flex-col gap-2 md:hidden"
+        role="group"
+        aria-label={ariaLabel}
+      >
+        <div className="flex w-full flex-nowrap items-center justify-between gap-2">
+          {renderStopButton()}
+          {renderPlayPauseButton()}
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <WaveSpeaker active={isPlaying} />
+          {renderProgressSection()}
+          {renderTimer()}
         </div>
       </div>
 
-      <span
-        className="shrink-0 tabular-nums text-xs font-medium text-muted-foreground sm:text-sm"
-        aria-live="polite"
+      <div
+        className="hidden w-full min-w-0 items-center gap-2.5 md:flex"
+        role="group"
+        aria-label={ariaLabel}
       >
-        {remainingClock}
-      </span>
-
-      {isPlaying ? (
-        <Button
-          type="button"
-          variant="primaryMuted"
-          onClick={onPause}
-          className="h-9 shrink-0 gap-1.5 rounded-[14px] px-2.5"
-        >
-          <Pause className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
-          {labels.pause}
-        </Button>
-      ) : (
-        <Button
-          type="button"
-          variant="primaryMuted"
-          onClick={onResume}
-          className="h-9 shrink-0 gap-1.5 rounded-[14px] px-2.5"
-        >
-          <Play className="h-4 w-4 shrink-0 pl-0.5" strokeWidth={2.25} aria-hidden />
-          {labels.play}
-        </Button>
-      )}
-    </div>
+        {renderStopButton()}
+        <WaveSpeaker active={isPlaying} />
+        {renderProgressSection()}
+        {renderTimer()}
+        {renderPlayPauseButton()}
+      </div>
+    </>
   )
 }

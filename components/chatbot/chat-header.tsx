@@ -19,7 +19,7 @@ export function ChatHeader({
   onClose,
 }: ChatHeaderProps) {
   return (
-    <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-5 sm:py-4 bg-primary text-primary-foreground rounded-t-xl sm:rounded-t-2xl">
+    <header className="sticky top-0 z-10 flex flex-wrap items-start md:items-center justify-between gap-3 px-3 py-3 sm:px-5 sm:py-4 bg-primary text-primary-foreground rounded-none md:rounded-t-2xl">
       <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0 flex-1">
         <div className="flex items-center gap-1 shrink-0">
           <span className="text-lg sm:text-xl font-bold tracking-tight">Québec</span>

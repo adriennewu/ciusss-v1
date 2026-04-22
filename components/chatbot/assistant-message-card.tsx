@@ -26,7 +26,7 @@ export function AssistantMessageCard({
       <div className="flex min-w-0 flex-1 items-start gap-2 sm:gap-2.5">
         <div
           className={cn(
-            "bg-card rounded-2xl px-4 py-3 sm:px-5 sm:py-4 shadow-sm max-w-[min(90%,32rem)] sm:max-w-[min(90%,36rem)] min-w-0",
+            "bg-card rounded-2xl rounded-tl-none px-4 py-3 sm:px-5 sm:py-4 shadow-sm max-w-[min(90%,32rem)] sm:max-w-[min(90%,36rem)] min-w-0",
             className
           )}
         >
