@@ -41,6 +41,11 @@ export interface ChatCopy {
   voiceRecordingConfirmAriaLabel: string
   typingIndicatorAriaLabel: string
   closeAriaLabel: string
+  /** Server-side STT (MediaRecorder / iOS path). */
+  voiceServerTranscriptionFailed: string
+  voiceServerNotConfigured: string
+  voiceRecordingTooShort: string
+  voiceNoSpeechRecognized: string
 }
 
 const fr: ChatCopy = {
@@ -114,6 +119,13 @@ const fr: ChatCopy = {
   voiceRecordingConfirmAriaLabel: "Confirmer la dictée",
   typingIndicatorAriaLabel: "En cours de réflexion",
   closeAriaLabel: "Fermer",
+  voiceServerTranscriptionFailed:
+    "La transcription n'a pas pu être effectuée. Réessayez.",
+  voiceServerNotConfigured:
+    "La dictée sur serveur n'est pas configurée (clé API manquante).",
+  voiceRecordingTooShort: "Enregistrement trop court. Réessayez.",
+  voiceNoSpeechRecognized:
+    "Aucune parole n'a été reconnue. Veuillez réessayer.",
 }
 
 const en: ChatCopy = {
@@ -187,6 +199,12 @@ const en: ChatCopy = {
   voiceRecordingConfirmAriaLabel: "Confirm dictation",
   typingIndicatorAriaLabel: "Thinking",
   closeAriaLabel: "Close",
+  voiceServerTranscriptionFailed:
+    "Transcription could not be completed. Please try again.",
+  voiceServerNotConfigured:
+    "Server dictation is not configured (missing API key).",
+  voiceRecordingTooShort: "Recording was too short. Please try again.",
+  voiceNoSpeechRecognized: "No speech was recognized. Please try again.",
 }
 
 export function getChatCopy(locale: ChatLocale): ChatCopy {

@@ -24,7 +24,7 @@ import {
 import type { SourcesPlacement } from "./prototype-config"
 import { SourceLink } from "./source-link"
 import { usePrototypeConversationFlow } from "./use-prototype-conversation-flow"
-import { useVoiceInput } from "./use-voice-input"
+import { useVoiceInput, type VoiceTranscriptMeta } from "./use-voice-input"
 import { getChatCopy, type ChatCopy, type ChatLocale } from "./chatbot-copy"
 import { RichBlockLines, RichParagraph, renderWithBold } from "./render-rich-text"
 import {
@@ -167,19 +167,29 @@ export function ChatbotModal({
   /** Next send after a voice transcript (until the user types in the field). */
   const lastSubmitSourceRef = useRef<"keyboard" | "voice">("keyboard")
 
-  const queueTranscriptIntoDraft = useCallback((text: string) => {
-    if (draftTranscriptTimeoutRef.current) {
-      clearTimeout(draftTranscriptTimeoutRef.current)
-    }
-    setDraft("")
-    setIsVoiceTranscribing(true)
-    draftTranscriptTimeoutRef.current = setTimeout(() => {
-      draftTranscriptTimeoutRef.current = null
-      lastSubmitSourceRef.current = "voice"
-      setDraft(text)
-      setIsVoiceTranscribing(false)
-    }, VOICE_DRAFT_PLACEHOLDER_MS)
-  }, [])
+  const queueTranscriptIntoDraft = useCallback(
+    (text: string, meta: VoiceTranscriptMeta) => {
+      if (draftTranscriptTimeoutRef.current) {
+        clearTimeout(draftTranscriptTimeoutRef.current)
+        draftTranscriptTimeoutRef.current = null
+      }
+      setDraft("")
+      if (meta.source === "server") {
+        lastSubmitSourceRef.current = "voice"
+        setDraft(text)
+        setIsVoiceTranscribing(false)
+        return
+      }
+      setIsVoiceTranscribing(true)
+      draftTranscriptTimeoutRef.current = setTimeout(() => {
+        draftTranscriptTimeoutRef.current = null
+        lastSubmitSourceRef.current = "voice"
+        setDraft(text)
+        setIsVoiceTranscribing(false)
+      }, VOICE_DRAFT_PLACEHOLDER_MS)
+    },
+    []
+  )
 
   const setDraftFromInput = useCallback((value: string) => {
     lastSubmitSourceRef.current = "keyboard"
@@ -206,7 +216,15 @@ export function ChatbotModal({
     clearError: clearVoiceError,
   } = useVoiceInput({
     locale,
+    onLocaleChange,
     onTranscript: queueTranscriptIntoDraft,
+    onAwaitingServerTranscript: setIsVoiceTranscribing,
+    messages: {
+      noSpeechRecognized: copy.voiceNoSpeechRecognized,
+      serverTranscriptionFailed: copy.voiceServerTranscriptionFailed,
+      serverNotConfigured: copy.voiceServerNotConfigured,
+      recordingTooShort: copy.voiceRecordingTooShort,
+    },
   })
 
   const scrollAreaRef = useRef<HTMLDivElement>(null)

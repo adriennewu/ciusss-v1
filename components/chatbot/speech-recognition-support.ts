@@ -16,3 +16,7 @@ export function isSpeechRecognitionSupported(): boolean {
 export function speechRecognitionLang(locale: ChatLocale): string {
   return locale === "fr" ? "fr-FR" : "en-US"
 }
+
+export function oppositeChatLocale(locale: ChatLocale): ChatLocale {
+  return locale === "fr" ? "en" : "fr"
+}
