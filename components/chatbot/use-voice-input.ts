@@ -47,6 +47,17 @@ export interface UseVoiceInputResult {
 }
 
 const POST_END_TEXT_FLUSH_MS = 220
+/** Chromium mobile often supports only one active SpeechRecognition; dual engines deadlock on confirm. */
+const MOBILE_WEB_SPEECH_UA =
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
+
+function shouldCollapseToSingleSpeechEngine(): boolean {
+  if (typeof navigator === "undefined") return false
+  return MOBILE_WEB_SPEECH_UA.test(navigator.userAgent)
+}
+
+/** If dual-engine confirm never reaches the merge, force teardown (ms). */
+const WEB_SPEECH_CONFIRM_SAFETY_MS = 2800
 
 function applySpeechResultToRefs(
   event: SpeechRecognitionEvent,
@@ -120,6 +131,16 @@ export function useVoiceInput({
   )
   /** Incremented to invalidate a scheduled post-`onend` transcript flush. */
   const speechFlushGenRef = useRef(0)
+  const confirmSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
+
+  const clearConfirmSafetyTimeout = useCallback(() => {
+    if (confirmSafetyTimeoutRef.current != null) {
+      clearTimeout(confirmSafetyTimeoutRef.current)
+      confirmSafetyTimeoutRef.current = null
+    }
+  }, [])
 
   const clearPostEndTimerOnly = useCallback(() => {
     if (postEndFlushTimeoutRef.current != null) {
@@ -129,9 +150,10 @@ export function useVoiceInput({
   }, [])
 
   const invalidatePendingSpeechFlush = useCallback(() => {
+    clearConfirmSafetyTimeout()
     clearPostEndTimerOnly()
     speechFlushGenRef.current += 1
-  }, [clearPostEndTimerOnly])
+  }, [clearConfirmSafetyTimeout, clearPostEndTimerOnly])
 
   const engineRef = useRef<"web-speech" | "media" | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -168,6 +190,9 @@ export function useVoiceInput({
   }, [])
 
   const mergedFinalizeSpeechConfirmFlush = useCallback(() => {
+    if (engineRef.current !== "web-speech") return
+    clearConfirmSafetyTimeout()
+    clearPostEndTimerOnly()
     pendingConfirmRef.current = false
     unexpectedWebSpeechEndHandledRef.current = true
     detachRecognition()
@@ -186,7 +211,13 @@ export function useVoiceInput({
     } else {
       setErrorMessage(messages.noSpeechRecognized)
     }
-  }, [detachRecognition, messages.noSpeechRecognized, tearDownAudio])
+  }, [
+    clearConfirmSafetyTimeout,
+    clearPostEndTimerOnly,
+    detachRecognition,
+    messages.noSpeechRecognized,
+    tearDownAudio,
+  ])
 
   /** OpenAI Whisper uses UI `locale` only; bilingual auto-detect is Web Speech–only. */
   const submitMediaTranscription = useCallback(
@@ -437,20 +468,22 @@ export function useVoiceInput({
       return
     }
 
-    const recSecondary = new Ctor()
-    wireRecognition(
-      recSecondary,
-      "secondary",
-      speechRecognitionLang(oppositeChatLocale(sessionLoc)),
-      secondaryFinalAccRef,
-      secondaryLiveRef
-    )
-    try {
-      recSecondary.start()
-      secondaryRecognitionRef.current = recSecondary
-    } catch {
-      detachOneEngineSilently(recSecondary)
-      secondaryRecognitionRef.current = null
+    if (!shouldCollapseToSingleSpeechEngine()) {
+      const recSecondary = new Ctor()
+      wireRecognition(
+        recSecondary,
+        "secondary",
+        speechRecognitionLang(oppositeChatLocale(sessionLoc)),
+        secondaryFinalAccRef,
+        secondaryLiveRef
+      )
+      try {
+        recSecondary.start()
+        secondaryRecognitionRef.current = recSecondary
+      } catch {
+        detachOneEngineSilently(recSecondary)
+        secondaryRecognitionRef.current = null
+      }
     }
 
     setIsRecording(true)
@@ -659,8 +692,23 @@ export function useVoiceInput({
       pendingConfirmRef.current = false
       setErrorMessage("Could not finalize recording.")
       hardStopWithoutConfirm()
+      return
     }
-  }, [hardStopWithoutConfirm])
+
+    clearConfirmSafetyTimeout()
+    confirmSafetyTimeoutRef.current = setTimeout(() => {
+      confirmSafetyTimeoutRef.current = null
+      if (engineRef.current !== "web-speech") return
+      if (!pendingConfirmRef.current) return
+      clearPostEndTimerOnly()
+      mergedFinalizeSpeechConfirmFlush()
+    }, WEB_SPEECH_CONFIRM_SAFETY_MS)
+  }, [
+    clearConfirmSafetyTimeout,
+    clearPostEndTimerOnly,
+    hardStopWithoutConfirm,
+    mergedFinalizeSpeechConfirmFlush,
+  ])
 
   const clearError = useCallback(() => setErrorMessage(null), [])
 
