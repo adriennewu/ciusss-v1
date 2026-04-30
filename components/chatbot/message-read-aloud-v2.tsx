@@ -25,20 +25,6 @@ export interface MessageReadAloudV2Props {
   hidden?: boolean
 }
 
-function WaveSpeaker({ active }: { active: boolean }) {
-  return (
-    <span
-      className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center text-primary",
-        active && "motion-safe:animate-pulse"
-      )}
-      aria-hidden
-    >
-      <Volume2 className="h-[18px] w-[18px]" strokeWidth={2} />
-    </span>
-  )
-}
-
 export function MessageReadAloudV2({
   mode,
   labels,
@@ -137,34 +123,15 @@ export function MessageReadAloudV2({
   )
 
   return (
-    <>
-      <div
-        className="flex w-full min-w-0 flex-col gap-2 md:hidden"
-        role="group"
-        aria-label={ariaLabel}
-      >
-        <div className="flex w-full flex-nowrap items-center justify-between gap-2">
-          {renderStopButton()}
-          {renderPlayPauseButton()}
-        </div>
-        <div className="flex min-w-0 items-center gap-2">
-          <WaveSpeaker active={isPlaying} />
-          {renderProgressSection()}
-          {renderTimer()}
-        </div>
-      </div>
-
-      <div
-        className="hidden w-full min-w-0 items-center gap-2.5 md:flex"
-        role="group"
-        aria-label={ariaLabel}
-      >
-        {renderStopButton()}
-        <WaveSpeaker active={isPlaying} />
-        {renderProgressSection()}
-        {renderTimer()}
-        {renderPlayPauseButton()}
-      </div>
-    </>
+    <div
+      className="flex w-full min-w-0 flex-row flex-nowrap items-center gap-2 sm:gap-2.5"
+      role="group"
+      aria-label={ariaLabel}
+    >
+      {renderStopButton()}
+      {renderProgressSection()}
+      {renderTimer()}
+      {renderPlayPauseButton()}
+    </div>
   )
 }

@@ -15,6 +15,7 @@ import {
 
 export default function Home() {
   const [locale, setLocale] = useState<ChatLocale>("fr")
+  const [chatOpen, setChatOpen] = useState(false)
   const [sourceVariant, setSourceVariant] =
     useState<SourceVariantId>(DEFAULT_SOURCE_VARIANT)
   const [audioVariant, setAudioVariant] =
@@ -45,7 +46,11 @@ export default function Home() {
   return (
     <main className="relative min-h-screen flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-gray-100 to-gray-200 px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
       <div className="relative flex w-full min-h-0 min-w-0 max-w-4xl flex-1 flex-col items-center justify-center">
-        <div className="hidden md:flex fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-[45] sm:right-6 sm:top-6">
+        <div
+          className="hidden md:flex fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-[45] sm:right-6 sm:top-6"
+          inert={chatOpen ? true : undefined}
+          aria-hidden={chatOpen ? true : undefined}
+        >
           <PrototypeSettings
             locale={locale}
             committedSource={sourceVariant}
@@ -60,6 +65,7 @@ export default function Home() {
           sourceVariant={sourceVariant}
           audioVariant={audioVariant}
           runtimeResetEpoch={runtimeResetEpoch}
+          onChatOpenChange={setChatOpen}
         />
       </div>
     </main>

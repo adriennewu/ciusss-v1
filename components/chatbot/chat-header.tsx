@@ -21,22 +21,29 @@ export function ChatHeader({
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-start md:items-center justify-between gap-3 px-3 py-3 sm:px-5 sm:py-4 bg-primary text-primary-foreground rounded-none md:rounded-t-2xl">
       <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0 flex-1">
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-lg sm:text-xl font-bold tracking-tight">Québec</span>
-          <div className="grid grid-cols-2 gap-0.5">
-            <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
-            <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
-            <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
-            <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
+        <div className="flex items-center gap-2 shrink-0 md:gap-3">
+          <div className="flex items-center gap-1">
+            <span className="text-lg sm:text-xl font-bold tracking-tight">Québec</span>
+            <div className="grid grid-cols-2 gap-0.5">
+              <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
+              <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
+              <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
+              <div className="w-2 h-2 rounded-sm bg-primary-foreground" />
+            </div>
           </div>
+          <BetaBadge locale={locale} className="md:hidden" />
         </div>
 
-        <div className="flex flex-col min-w-0">
+        <p className="sr-only md:hidden">
+          Assistant CIUSSS, Centre-Ouest-de-l&apos;Île-de-Montréal
+        </p>
+
+        <div className="hidden min-w-0 flex-col md:flex">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm sm:text-base font-semibold truncate">
               Assistant CIUSSS
             </span>
-            <BetaBadge />
+            <BetaBadge locale={locale} />
           </div>
           <span className="text-xs text-primary-foreground/80">
             Centre-Ouest-de-l&apos;Île-de-Montréal
@@ -49,7 +56,7 @@ export function ChatHeader({
         <button
           type="button"
           onClick={onClose}
-          className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25 transition-colors"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-primary-foreground/15 text-primary-foreground transition-colors hover:bg-primary-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
           aria-label={closeAriaLabel}
         >
           <X className="w-4 h-4" aria-hidden />

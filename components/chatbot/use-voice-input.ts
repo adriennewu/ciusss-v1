@@ -12,22 +12,25 @@ import {
   extensionForRecorderMime,
   pickMediaRecorderMimeType,
 } from "@/lib/media-recorder-mime"
+import { inferLocaleFromText } from "@/lib/infer-locale-from-text"
 
 export type VoiceTranscriptSource = "web-speech" | "server"
 
 export interface VoiceTranscriptMeta {
   source: VoiceTranscriptSource
+  /** Whisper, merge winner, or transcript heuristics; null when detection is inconclusive. */
+  detectedLocale: ChatLocale | null
 }
 
 interface UseVoiceInputOptions {
   locale: ChatLocale
-  /** Same handler as the FR/EN header toggle; used when dual Web Speech picks the non-UI language. */
-  onLocaleChange?: (locale: ChatLocale) => void
   onTranscript: (text: string, meta: VoiceTranscriptMeta) => void
   /** Shown while OpenAI transcription runs (MediaRecorder / iOS path). */
   onAwaitingServerTranscript?: (pending: boolean) => void
   messages: {
     noSpeechRecognized: string
+    /** Web Speech only: no transcript in the UI language (often wrong language spoken). */
+    voiceWebSpeechNoMatch: string
     serverTranscriptionFailed: string
     serverNotConfigured: string
     recordingTooShort: string
@@ -47,15 +50,6 @@ export interface UseVoiceInputResult {
 }
 
 const POST_END_TEXT_FLUSH_MS = 220
-/** Chromium mobile often supports only one active SpeechRecognition; dual engines deadlock on confirm. */
-const MOBILE_WEB_SPEECH_UA =
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
-
-function shouldCollapseToSingleSpeechEngine(): boolean {
-  if (typeof navigator === "undefined") return false
-  return MOBILE_WEB_SPEECH_UA.test(navigator.userAgent)
-}
-
 /** If dual-engine confirm never reaches the merge, force teardown (ms). */
 const WEB_SPEECH_CONFIRM_SAFETY_MS = 2800
 
@@ -76,6 +70,53 @@ function applySpeechResultToRefs(
   liveRef.current = (f + gap + interimPart).trimEnd()
 }
 
+type DualWebSpeechWinner = "primary" | "secondary" | null
+
+/**
+ * Merge primary + secondary lane transcripts. Primary engine uses `primaryLocale` (`lang`);
+ * secondary uses the opposite locale. Returns which lane produced the chosen text for
+ * `detectedLocale` (secondary win ⇒ opposite of UI locale).
+ */
+function pickDualWebSpeechMerge(
+  primaryText: string,
+  secondaryText: string,
+  primaryLocale: ChatLocale
+): { text: string; winner: DualWebSpeechWinner } {
+  if (primaryLocale === "en") {
+    const en = primaryText.trim()
+    const fr = secondaryText.trim()
+    if (!en && !fr) return { text: "", winner: null }
+
+    const frInf = fr ? inferLocaleFromText(fr, { uiLocale: "en" }) : null
+
+    if (fr && frInf === "fr") {
+      if (!en || fr.length >= Math.max(6, en.length * 0.55)) {
+        return { text: fr, winner: "secondary" }
+      }
+    }
+
+    if (en) return { text: en, winner: "primary" }
+    if (fr) return { text: fr, winner: "secondary" }
+    return { text: "", winner: null }
+  }
+
+  const fr = primaryText.trim()
+  const en = secondaryText.trim()
+  if (!en && !fr) return { text: "", winner: null }
+
+  const enInf = en ? inferLocaleFromText(en, { uiLocale: "fr" }) : null
+
+  if (en && enInf === "en") {
+    if (!fr || en.length >= Math.max(6, fr.length * 0.55)) {
+      return { text: en, winner: "secondary" }
+    }
+  }
+
+  if (fr) return { text: fr, winner: "primary" }
+  if (en) return { text: en, winner: "secondary" }
+  return { text: "", winner: null }
+}
+
 function formatUserMediaError(err: unknown): string {
   if (err && typeof err === "object" && "name" in err) {
     const n = (err as { name: string }).name
@@ -89,16 +130,41 @@ function formatUserMediaError(err: unknown): string {
   return "Could not access the microphone."
 }
 
-/** iOS / no-SpeechRecognition: uses server STT with a single Whisper language (no dual-lang auto-detect). */
-function preferMediaRecorderPath(): boolean {
-  if (typeof window === "undefined") return false
-  if (isIOSLikeClient()) return true
-  return getSpeechRecognitionConstructor() == null
+/**
+ * Use MediaRecorder + Whisper only when the server reports an API key and `MediaRecorder`
+ * exists. Otherwise use Web Speech (desktop avoids iOS dual-engine quirks via `!ios`).
+ * Without a key we never choose MediaRecorder-only upload, which would always fail.
+ */
+async function resolveVoiceSessionKind(): Promise<"media" | "web-speech"> {
+  if (typeof window === "undefined") return "web-speech"
+
+  const hasSR = getSpeechRecognitionConstructor() != null
+  const hasMR = typeof MediaRecorder !== "undefined"
+  const ios = isIOSLikeClient()
+
+  let configured = false
+  try {
+    const res = await fetch("/api/transcribe/status", { cache: "no-store" })
+    const raw = await res.text()
+    if (res.ok && raw.trim()) {
+      try {
+        const j = JSON.parse(raw) as { configured?: boolean }
+        configured = j.configured === true
+      } catch {
+        configured = false
+      }
+    }
+  } catch {
+    configured = false
+  }
+
+  if (configured && hasMR) return "media"
+  if (hasSR && !ios) return "web-speech"
+  return "web-speech"
 }
 
 export function useVoiceInput({
   locale,
-  onLocaleChange,
   onTranscript,
   onAwaitingServerTranscript,
   messages,
@@ -115,16 +181,17 @@ export function useVoiceInput({
   const secondaryFinalAccRef = useRef("")
   const primaryLiveRef = useRef("")
   const secondaryLiveRef = useRef("")
-  const sessionLocaleRef = useRef<ChatLocale>(locale)
   const speechConfirmEndsRemainingRef = useRef(0)
   const unexpectedWebSpeechEndHandledRef = useRef(false)
   const pendingConfirmRef = useRef(false)
   const onTranscriptRef = useRef(onTranscript)
   onTranscriptRef.current = onTranscript
-  const onLocaleChangeRef = useRef(onLocaleChange)
-  onLocaleChangeRef.current = onLocaleChange
   const onAwaitingServerTranscriptRef = useRef(onAwaitingServerTranscript)
   onAwaitingServerTranscriptRef.current = onAwaitingServerTranscript
+  const localeRef = useRef(locale)
+  localeRef.current = locale
+  /** True when this session runs primary + secondary SpeechRecognition (non‑iOS desktop). */
+  const dualWebSpeechIntentRef = useRef(false)
 
   const postEndFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -201,25 +268,49 @@ export function useVoiceInput({
     engineRef.current = null
     const primaryText = primaryLiveRef.current.trim()
     const secondaryText = secondaryLiveRef.current.trim()
-    if (primaryText) {
-      onTranscriptRef.current(primaryText, { source: "web-speech" })
-    } else if (secondaryText) {
-      onLocaleChangeRef.current?.(
-        oppositeChatLocale(sessionLocaleRef.current)
+    const usedDualWebSpeech = dualWebSpeechIntentRef.current
+    dualWebSpeechIntentRef.current = false
+
+    let chosen: string
+    let dualWinner: DualWebSpeechWinner = null
+    if (usedDualWebSpeech) {
+      const merged = pickDualWebSpeechMerge(
+        primaryText,
+        secondaryText,
+        localeRef.current
       )
-      onTranscriptRef.current(secondaryText, { source: "web-speech" })
+      chosen = merged.text
+      dualWinner = merged.winner
     } else {
-      setErrorMessage(messages.noSpeechRecognized)
+      chosen = primaryText
+    }
+
+    if (chosen) {
+      let detectedLocale: ChatLocale | null
+      if (usedDualWebSpeech && dualWinner === "secondary") {
+        detectedLocale = oppositeChatLocale(localeRef.current)
+      } else {
+        const inferred = inferLocaleFromText(chosen, {
+          uiLocale: localeRef.current,
+        })
+        detectedLocale =
+          inferred === "en" || inferred === "fr" ? inferred : null
+      }
+      onTranscriptRef.current(chosen, {
+        source: "web-speech",
+        detectedLocale,
+      })
+    } else {
+      setErrorMessage(messages.voiceWebSpeechNoMatch)
     }
   }, [
     clearConfirmSafetyTimeout,
     clearPostEndTimerOnly,
     detachRecognition,
-    messages.noSpeechRecognized,
+    messages.voiceWebSpeechNoMatch,
     tearDownAudio,
   ])
 
-  /** OpenAI Whisper uses UI `locale` only; bilingual auto-detect is Web Speech–only. */
   const submitMediaTranscription = useCallback(
     async (blob: Blob, sessionId: number) => {
       const fail = (msg: string) => {
@@ -236,7 +327,7 @@ export function useVoiceInput({
         return
       }
 
-      if (blob.size < 400) {
+      if (blob.size < 32) {
         fail(messages.recordingTooShort)
         return
       }
@@ -244,7 +335,8 @@ export function useVoiceInput({
       const ext = extensionForRecorderMime(blob.type || mediaMimeRef.current)
       const fd = new FormData()
       fd.append("file", blob, `recording.${ext}`)
-      fd.append("locale", locale)
+      fd.append("locale", "auto")
+      fd.append("ui_locale", locale)
       fd.append("filename", `recording.${ext}`)
 
       try {
@@ -252,7 +344,26 @@ export function useVoiceInput({
           method: "POST",
           body: fd,
         })
-        const data = (await res.json()) as { text?: string; error?: string }
+        const raw = await res.text()
+        let data: {
+          text?: string
+          error?: string
+          detail?: string
+          detectedLocale?: "en" | "fr" | null
+        }
+        try {
+          data = raw ? (JSON.parse(raw) as typeof data) : {}
+        } catch {
+          if (process.env.NODE_ENV === "development") {
+            console.error(
+              "[transcribe] non-json body",
+              res.status,
+              raw.slice(0, 200)
+            )
+          }
+          fail(messages.serverTranscriptionFailed)
+          return
+        }
 
         if (sessionId !== mediaSessionIdRef.current) {
           onAwaitingServerTranscriptRef.current?.(false)
@@ -264,7 +375,19 @@ export function useVoiceInput({
           return
         }
 
+        if (res.status === 400 && data.error === "file_too_small") {
+          fail(messages.recordingTooShort)
+          return
+        }
+
         if (!res.ok) {
+          if (
+            process.env.NODE_ENV === "development" &&
+            typeof data.detail === "string" &&
+            data.detail
+          ) {
+            console.error("[transcribe]", res.status, data.detail)
+          }
           fail(messages.serverTranscriptionFailed)
           return
         }
@@ -275,10 +398,18 @@ export function useVoiceInput({
           return
         }
 
+        const detected: ChatLocale | null =
+          data.detectedLocale === "en" || data.detectedLocale === "fr"
+            ? data.detectedLocale
+            : null
+
         onAwaitingServerTranscriptRef.current?.(false)
         setIsRecording(false)
         engineRef.current = null
-        onTranscriptRef.current(text, { source: "server" })
+        onTranscriptRef.current(text, {
+          source: "server",
+          detectedLocale: detected,
+        })
       } catch {
         if (sessionId !== mediaSessionIdRef.current) {
           onAwaitingServerTranscriptRef.current?.(false)
@@ -299,6 +430,7 @@ export function useVoiceInput({
 
   const beginWebSpeechSession = useCallback(async () => {
     engineRef.current = "web-speech"
+    dualWebSpeechIntentRef.current = false
     unexpectedWebSpeechEndHandledRef.current = false
     const Ctor = getSpeechRecognitionConstructor()
     if (!Ctor) {
@@ -308,7 +440,6 @@ export function useVoiceInput({
     }
 
     const sessionLoc: ChatLocale = locale
-    sessionLocaleRef.current = sessionLoc
 
     let stream: MediaStream
     try {
@@ -458,17 +589,11 @@ export function useVoiceInput({
     )
     primaryRecognitionRef.current = recPrimary
 
-    try {
-      recPrimary.start()
-    } catch {
-      setErrorMessage("Could not start speech recognition.")
-      detachRecognition()
-      tearDownAudio()
-      engineRef.current = null
-      return
-    }
+    const useDualWebSpeech = !isIOSLikeClient()
 
-    if (!shouldCollapseToSingleSpeechEngine()) {
+    if (useDualWebSpeech) {
+      secondaryFinalAccRef.current = ""
+      secondaryLiveRef.current = ""
       const recSecondary = new Ctor()
       wireRecognition(
         recSecondary,
@@ -477,12 +602,34 @@ export function useVoiceInput({
         secondaryFinalAccRef,
         secondaryLiveRef
       )
+      secondaryRecognitionRef.current = recSecondary
       try {
         recSecondary.start()
-        secondaryRecognitionRef.current = recSecondary
       } catch {
-        detachOneEngineSilently(recSecondary)
         secondaryRecognitionRef.current = null
+        setErrorMessage("Could not start speech recognition.")
+        detachRecognition()
+        tearDownAudio()
+        engineRef.current = null
+        return
+      }
+      dualWebSpeechIntentRef.current = true
+      queueMicrotask(() => {
+        try {
+          recPrimary.start()
+        } catch {
+          /* Opposite-lang lane still useful when primary start races secondary */
+        }
+      })
+    } else {
+      try {
+        recPrimary.start()
+      } catch {
+        setErrorMessage("Could not start speech recognition.")
+        detachRecognition()
+        tearDownAudio()
+        engineRef.current = null
+        return
       }
     }
 
@@ -595,7 +742,8 @@ export function useVoiceInput({
     secondaryLiveRef.current = ""
     pendingConfirmRef.current = false
 
-    if (preferMediaRecorderPath()) {
+    const kind = await resolveVoiceSessionKind()
+    if (kind === "media") {
       await beginMediaRecorderSession()
     } else {
       await beginWebSpeechSession()
@@ -607,6 +755,7 @@ export function useVoiceInput({
     pendingConfirmRef.current = false
     unexpectedWebSpeechEndHandledRef.current = true
     mediaSessionIdRef.current += 1
+    dualWebSpeechIntentRef.current = false
 
     try {
       primaryRecognitionRef.current?.abort()
@@ -654,9 +803,20 @@ export function useVoiceInput({
   const confirmRecording = useCallback(() => {
     if (engineRef.current === "media") {
       const mr = mediaRecorderRef.current
-      if (!mr || mr.state === "inactive") return
+      if (!mr || mr.state === "inactive") {
+        setErrorMessage(messages.serverTranscriptionFailed)
+        hardStopWithoutConfirm()
+        return
+      }
       setTimelineVisualizationActive(false)
       onAwaitingServerTranscriptRef.current?.(true)
+      try {
+        if (typeof mr.requestData === "function") {
+          mr.requestData()
+        }
+      } catch {
+        /* noop */
+      }
       try {
         mr.stop()
       } catch {
@@ -708,6 +868,7 @@ export function useVoiceInput({
     clearPostEndTimerOnly,
     hardStopWithoutConfirm,
     mergedFinalizeSpeechConfirmFlush,
+    messages.serverTranscriptionFailed,
   ])
 
   const clearError = useCallback(() => setErrorMessage(null), [])

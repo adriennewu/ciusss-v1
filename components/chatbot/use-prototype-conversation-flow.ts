@@ -46,6 +46,8 @@ export interface UsePrototypeConversationFlowResult {
   ) => void
   /** True when at least one services follow-up assistant message exists in the thread */
   showFollowUpChips: boolean
+  /** True while `runProgressiveReveal` has at least one in-flight reveal (depth > 0). */
+  isProgressiveRevealActive: boolean
 }
 
 function nextId() {
@@ -96,6 +98,7 @@ export function usePrototypeConversationFlow({
   const [thinkingAfterUserId, setThinkingAfterUserId] = useState<string | null>(null)
   const [parkingResponseInProgress, setParkingResponseInProgress] = useState(false)
   const [conversationBusy, setConversationBusy] = useState(false)
+  const [progressiveRevealDepth, setProgressiveRevealDepth] = useState(0)
 
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const queueRef = useRef<((onDone: () => void) => void)[]>([])
@@ -119,6 +122,7 @@ export function usePrototypeConversationFlow({
     setThinkingAfterUserId(null)
     setParkingResponseInProgress(false)
     setConversationBusy(false)
+    setProgressiveRevealDepth(0)
   }, [clearTimers])
 
   useEffect(() => {
@@ -150,12 +154,19 @@ export function usePrototypeConversationFlow({
         onComplete()
         return
       }
+
+      setProgressiveRevealDepth((d) => d + 1)
       let i = 0
       let acc = ""
+
+      const endReveal = () => {
+        setProgressiveRevealDepth((d) => Math.max(0, d - 1))
+      }
 
       const step = () => {
         if (i >= lines.length) {
           onComplete()
+          endReveal()
           return
         }
         acc = i === 0 ? lines[0]! : `${acc}\n${lines[i]!}`
@@ -163,6 +174,7 @@ export function usePrototypeConversationFlow({
         i++
         if (i >= lines.length) {
           onComplete()
+          endReveal()
           return
         }
         pushTimeout(step, PROGRESSIVE_CHUNK_MS)
@@ -452,12 +464,49 @@ export function usePrototypeConversationFlow({
 
   const onSuggestionSelect = useCallback(
     (suggestionId: string) => {
-      if (suggestionId !== SERVICES_SUGGESTION_ID) return
-      enqueueTurn((done) => {
-        runServicesTurn(done)
-      })
+      const { locale: loc } = optsRef.current
+      const copy = getChatCopy(loc)
+      const parkingCopy = getParkingCopy(loc)
+
+      if (suggestionId === SERVICES_SUGGESTION_ID) {
+        enqueueTurn((done) => {
+          runServicesTurn(done)
+        })
+        return
+      }
+
+      const initial = copy.initialSuggestions.find((s) => s.id === suggestionId)
+      if (initial) {
+        enqueueTurn((done) => {
+          runHospitalAddressTurn(initial.label, done)
+        })
+        return
+      }
+
+      const follow = copy.followUpSuggestions.find((s) => s.id === suggestionId)
+      if (follow) {
+        enqueueTurn((done) => {
+          runHospitalAddressTurn(follow.label, done)
+        })
+        return
+      }
+
+      const parkingFollow = parkingCopy.followUpSuggestions.find(
+        (s) => s.id === suggestionId
+      )
+      if (parkingFollow) {
+        enqueueTurn((done) => {
+          runParkingTurn(parkingFollow.label, done)
+        })
+      }
     },
-    [enqueueTurn, runServicesTurn]
+    [
+      enqueueTurn,
+      runHospitalAddressTurn,
+      runParkingTurn,
+      runServicesTurn,
+      optsRef,
+    ]
   )
 
   const onManualSubmit = useCallback(
@@ -495,5 +544,6 @@ export function usePrototypeConversationFlow({
     onSuggestionSelect,
     onManualSubmit,
     showFollowUpChips,
+    isProgressiveRevealActive: progressiveRevealDepth > 0,
   }
 }

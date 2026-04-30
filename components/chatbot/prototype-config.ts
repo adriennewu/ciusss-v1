@@ -52,6 +52,8 @@ export const DEFAULT_PRIMARY_COLOR: PrimaryColorId = "purple"
 export type AudioVariantId =
   | "v1_icon_floating_action_modal"
   | "v2_full_screen_reader"
+  | "v3_full_screen_audio"
+  | "v4_full_screen_audio"
 
 export interface AudioVariantOption {
   id: AudioVariantId
@@ -67,9 +69,27 @@ export const AUDIO_VARIANTS: readonly AudioVariantOption[] = [
     id: "v2_full_screen_reader",
     label: "V2 — full screen reader",
   },
+  {
+    id: "v3_full_screen_audio",
+    label: "V3 — full screen audio",
+  },
+  {
+    id: "v4_full_screen_audio",
+    label: "V4 — full screen audio",
+  },
 ] as const
 
-export const DEFAULT_AUDIO_VARIANT: AudioVariantId = "v2_full_screen_reader"
+export const DEFAULT_AUDIO_VARIANT: AudioVariantId = "v4_full_screen_audio"
+
+/** V3/V4 share the full-screen audio + focus layout behaviour. */
+export function isFullScreenAudioVariant(id: AudioVariantId): boolean {
+  return id === "v3_full_screen_audio" || id === "v4_full_screen_audio"
+}
+
+/** Read-aloud controls in the V2 footer style (composer strip or full-screen audio). */
+export function usesV2StyleReadAloudFooter(id: AudioVariantId): boolean {
+  return id === "v2_full_screen_reader" || isFullScreenAudioVariant(id)
+}
 
 const sourceById = Object.fromEntries(
   SOURCE_VARIANTS.map((v) => [v.id, v])

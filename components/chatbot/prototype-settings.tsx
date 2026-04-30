@@ -86,10 +86,18 @@ export function PrototypeSettings({
     setOpen(false)
   }
 
-  const audioLabelForId = (id: AudioVariantId) =>
-    id === "v1_icon_floating_action_modal"
-      ? copy.audioOptionV1
-      : copy.audioOptionV2
+  const audioLabelForId = (id: AudioVariantId) => {
+    switch (id) {
+      case "v1_icon_floating_action_modal":
+        return copy.audioOptionV1
+      case "v2_full_screen_reader":
+        return copy.audioOptionV2
+      case "v3_full_screen_audio":
+        return copy.audioOptionV3
+      case "v4_full_screen_audio":
+        return copy.audioOptionV4
+    }
+  }
 
   return (
     <div className={cn(className)}>

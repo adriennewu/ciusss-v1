@@ -14,6 +14,9 @@
   --foreground: oklch(0.2 0.02 264);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.2 0.02 264);
+  /** Beta badge (brand yellow + black label). */
+  --beta-badge-bg: #ffc943;
+  --beta-badge-fg: #000000;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2 0.02 264);
   --primary: #5969de;
@@ -22,7 +25,8 @@
   --secondary: oklch(0.96 0.01 264);
   --secondary-foreground: oklch(0.3 0.02 264);
   --muted: oklch(0.96 0.01 264);
-  --muted-foreground: oklch(0.5 0.02 264);
+  /* Darker than default for placeholder / secondary text on white (≥4.5:1 on card). */
+  --muted-foreground: oklch(0.38 0.02 264);
   --accent: oklch(0.75 0.15 50);
   --accent-foreground: oklch(0.3 0.05 50);
   --destructive: oklch(0.577 0.245 27.325);
@@ -101,10 +105,11 @@ html[data-prototype-primary="green"] {
 }
 
 html[data-prototype-primary="yellow"] {
-  --primary: #ffbf00;
+  /* Slightly deeper yellow for ≥3:1 icon/UI contrast on white while keeping brand warmth */
+  --primary: #e6ac00;
   --primary-foreground: #171717;
-  --primary-on-background: #422006;
-  --ring: #d4a800;
+  --primary-on-background: #3d1f05;
+  --ring: #b88600;
 }
 
 @theme inline {
@@ -130,6 +135,8 @@ html[data-prototype-primary="yellow"] {
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-beta-badge-bg: var(--beta-badge-bg);
+  --color-beta-badge-fg: var(--beta-badge-fg);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

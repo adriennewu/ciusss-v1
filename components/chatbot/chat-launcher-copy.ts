@@ -4,4 +4,3 @@ export const CHAT_LAUNCHER_TOOLTIP_FR =
 
 export const CHAT_LAUNCHER_TOOLTIP_DISMISS_ARIA = "Fermer l’aide"
 
-export const CHAT_LAUNCHER_FAB_ARIA = "Ouvrir l’assistant"

@@ -14,6 +14,8 @@ export function getPrototypeSettingsCopy(locale: ChatLocale) {
         settingsAria: "Paramètres du prototype",
         audioOptionV1: "V1 — icône et modal d’action flottant",
         audioOptionV2: "V2 — lecteur plein écran",
+        audioOptionV3: "V3 — audio plein écran",
+        audioOptionV4: "V4 — audio plein écran",
       }
     : {
         dialogTitle: "Prototype settings",
@@ -27,5 +29,7 @@ export function getPrototypeSettingsCopy(locale: ChatLocale) {
         settingsAria: "Prototype settings",
         audioOptionV1: "V1 — icon and floating action modal",
         audioOptionV2: "V2 — full screen reader",
+        audioOptionV3: "V3 — full screen audio",
+        audioOptionV4: "V4 — full screen audio",
       }
 }

@@ -7,14 +7,15 @@ import { LoadingDots } from "./loading-dots"
 interface TypingIndicatorProps {
   showAvatar?: boolean
   tallBubble?: boolean
-  ariaLabel?: string
+  /** Visible / SR text for the typing state (also used inside the live region). */
+  statusText: string
   className?: string
 }
 
 export function TypingIndicator({
   showAvatar = false,
   tallBubble = false,
-  ariaLabel = "En cours de réflexion",
+  statusText,
   className,
 }: TypingIndicatorProps) {
   return (
@@ -24,7 +25,13 @@ export function TypingIndicator({
       ) : (
         <div className="w-10 flex-shrink-0" aria-hidden />
       )}
-      <div role="status" aria-label={ariaLabel}>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="flex min-w-0 flex-col gap-1"
+      >
+        <span className="sr-only">{statusText}</span>
         <LoadingDots variant="assistant" tall={tallBubble} />
       </div>
     </div>

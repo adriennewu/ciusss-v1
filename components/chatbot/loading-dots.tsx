@@ -14,7 +14,7 @@ interface LoadingDotsProps {
 const variantClasses: Record<LoadingDotsVariant, { wrap: string; dot: string }> = {
   assistant: {
     wrap: "inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 shadow-sm py-1.5",
-    dot: "bg-primary",
+    dot: "bg-primary-on-background",
   },
   userBubble: {
     wrap: "inline-flex items-center gap-1 py-0.5",

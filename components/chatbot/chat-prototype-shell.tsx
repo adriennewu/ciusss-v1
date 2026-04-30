@@ -1,16 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { ChatbotModal } from "./chatbot-modal"
 import { ChatLauncherFab } from "./chat-launcher-fab"
 import { ChatLauncherTooltip } from "./chat-launcher-tooltip"
 import {
-  CHAT_LAUNCHER_FAB_ARIA,
   CHAT_LAUNCHER_TOOLTIP_DISMISS_ARIA,
   CHAT_LAUNCHER_TOOLTIP_FR,
 } from "./chat-launcher-copy"
-import type { ChatLocale } from "./chatbot-copy"
+import { getChatCopy, type ChatLocale } from "./chatbot-copy"
 import type { AudioVariantId, SourceVariantId } from "./prototype-config"
 
 export interface ChatPrototypeShellProps {
@@ -19,6 +18,8 @@ export interface ChatPrototypeShellProps {
   sourceVariant: SourceVariantId
   audioVariant: AudioVariantId
   runtimeResetEpoch: number
+  /** When the chat panel opens or closes (e.g. to set `inert` on sibling UI). */
+  onChatOpenChange?: (open: boolean) => void
 }
 
 export function ChatPrototypeShell({
@@ -27,8 +28,11 @@ export function ChatPrototypeShell({
   sourceVariant,
   audioVariant,
   runtimeResetEpoch,
+  onChatOpenChange,
 }: ChatPrototypeShellProps) {
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const launcherFabRef = useRef<HTMLButtonElement>(null)
+  const copy = getChatCopy(locale)
   const [launcherTooltipDismissed, setLauncherTooltipDismissed] =
     useState(false)
   const [delayReady, setDelayReady] = useState(false)
@@ -49,6 +53,10 @@ export function ChatPrototypeShell({
     return () => window.clearTimeout(id)
   }, [launcherTooltipDismissed, isChatOpen])
 
+  useEffect(() => {
+    onChatOpenChange?.(isChatOpen)
+  }, [isChatOpen, onChatOpenChange])
+
   const handleOpenFromFab = () => {
     setLauncherTooltipDismissed(true)
     setIsChatOpen(true)
@@ -60,6 +68,13 @@ export function ChatPrototypeShell({
 
   const showLauncherTooltip =
     !isChatOpen && !launcherTooltipDismissed && delayReady
+
+  const handleRequestClose = () => {
+    setIsChatOpen(false)
+    requestAnimationFrame(() => {
+      launcherFabRef.current?.focus()
+    })
+  }
 
   return (
     <>
@@ -77,7 +92,8 @@ export function ChatPrototypeShell({
           sourceVariant={sourceVariant}
           audioVariant={audioVariant}
           runtimeResetEpoch={runtimeResetEpoch}
-          onRequestClose={() => setIsChatOpen(false)}
+          isActive={isChatOpen}
+          onRequestClose={handleRequestClose}
         />
       </div>
 
@@ -97,7 +113,8 @@ export function ChatPrototypeShell({
             />
           )}
           <ChatLauncherFab
-            ariaLabel={CHAT_LAUNCHER_FAB_ARIA}
+            ref={launcherFabRef}
+            ariaLabel={copy.launcherFabAriaLabel}
             onOpen={handleOpenFromFab}
           />
         </div>

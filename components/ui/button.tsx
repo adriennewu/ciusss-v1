@@ -15,10 +15,10 @@ const buttonVariants = cva(
         outline:
           'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        /** Muted primary wash + primary-family icon/text; use for secondary actions (e.g. mic). */
+          'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary)_88%,var(--secondary-foreground))] hover:shadow-sm',
+        /** Muted primary wash + primary-family icon/text; use for secondary actions (e.g. mic). Opaque color-mix matches /10 and /15 luminosity over card without show-through. */
         primaryMuted:
-          'border border-primary/20 bg-primary/10 text-primary-on-background shadow-xs hover:bg-primary/15 hover:border-primary/30 focus-visible:ring-primary/35 dark:border-primary/40 dark:bg-primary/15 dark:text-primary dark:hover:bg-primary/25 dark:hover:border-primary/50 [&_svg]:text-current',
+          'border border-primary/20 bg-[color-mix(in_oklch,var(--primary)_10%,var(--card))] text-primary-on-background shadow-xs hover:bg-[color-mix(in_oklch,var(--primary)_22%,var(--card))] hover:border-primary/40 hover:shadow-sm focus-visible:ring-primary/35 dark:border-primary/40 dark:bg-[color-mix(in_oklch,var(--primary)_15%,var(--card))] dark:text-primary dark:hover:bg-[color-mix(in_oklch,var(--primary)_32%,var(--card))] dark:hover:border-primary/60 [&_svg]:text-current',
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
