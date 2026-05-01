@@ -33,6 +33,8 @@ import { SourceLink } from "./source-link"
 import { usePrototypeConversationFlow } from "./use-prototype-conversation-flow"
 import { useVoiceInput, type VoiceTranscriptMeta } from "./use-voice-input"
 import {
+  getAssistantFirstPlainText,
+  getAssistantSecondPlainText,
   getChatCopy,
   getSuggestionChipAriaLabel,
   type ChatCopy,
@@ -74,6 +76,46 @@ const VOICE_DRAFT_PLACEHOLDER_MS = 1000
 const CHAT_PIN_SCROLL_INSTANT_THRESHOLD_PX = 8
 /** Space left between the scroll viewport top and the user bubble when pinned (header breathing room). */
 const CHAT_PIN_USER_TOP_GAP_PX = 12
+
+/** Maps chip label text to the active UI locale when it matches a known FR/EN pair. */
+function mapMatchingChipLabelToLocale(
+  text: string,
+  locale: ChatLocale
+): string | null {
+  const frC = getChatCopy("fr")
+  const enC = getChatCopy("en")
+  const frP = getParkingCopy("fr")
+  const enP = getParkingCopy("en")
+  const pairs: { fr: string; en: string }[] = []
+  const addPairs = (
+    a: readonly { id: string; label: string }[],
+    b: readonly { id: string; label: string }[]
+  ) => {
+    for (const x of a) {
+      const y = b.find((p) => p.id === x.id)
+      if (y) pairs.push({ fr: x.label, en: y.label })
+    }
+  }
+  addPairs(frC.initialSuggestions, enC.initialSuggestions)
+  addPairs(frC.followUpSuggestions, enC.followUpSuggestions)
+  addPairs(frP.followUpSuggestions, enP.followUpSuggestions)
+  for (const p of pairs) {
+    if (text === p.fr || text === p.en) {
+      return locale === "fr" ? p.fr : p.en
+    }
+  }
+  return null
+}
+
+function localizedUserBubbleText(
+  m: Extract<ChatMessage, { kind: "user" }>,
+  locale: ChatLocale
+): string {
+  if (m.origin === "services") {
+    return getChatCopy(locale).userServicesQuestion
+  }
+  return mapMatchingChipLabelToLocale(m.text, locale) ?? m.text
+}
 
 function getLastUserMessage(
   messages: readonly ChatMessage[]
@@ -1314,7 +1356,11 @@ export function ChatbotModal({
           </>
         ) : (
           <RichBlockLines
-            text={msg.displayText}
+            text={
+              !msg.playbackStructured && msg.revealComplete
+                ? getAssistantFirstPlainText(copy, placement)
+                : msg.displayText
+            }
             firstLineClassName="mb-3"
           />
         )}
@@ -1344,8 +1390,7 @@ export function ChatbotModal({
       >
         <RichBlockLines
           text={
-            msg.playbackStructured ||
-            (msg.revealComplete && msg.combinedTailVisible)
+            msg.playbackStructured || msg.revealComplete
               ? parkingCopy.body
               : msg.displayText
           }
@@ -1444,7 +1489,13 @@ export function ChatbotModal({
           actions={actions}
           footer={footer}
         >
-          <RichBlockLines text={msg.displayText} />
+          <RichBlockLines
+            text={
+              !msg.playbackStructured && msg.revealComplete
+                ? getAssistantFirstPlainText(copy, pl)
+                : msg.displayText
+            }
+          />
           {showInlineSourcesBlock && (
             <SourcesBlock
               sources={copy.sourcesInline}
@@ -1517,7 +1568,13 @@ export function ChatbotModal({
       {msg.playbackStructured ? (
         <RichParagraph text={copy.assistantFollowUp} />
       ) : (
-        <RichBlockLines text={msg.displayText} />
+        <RichBlockLines
+          text={
+            msg.revealComplete
+              ? getAssistantSecondPlainText(copy)
+              : msg.displayText
+          }
+        />
       )}
     </AssistantMessageCard>
     )
@@ -1549,10 +1606,9 @@ export function ChatbotModal({
     v3FocusBubble = false
   ) => {
     const { actions, footer } = assistantReadAloudSlots(msg, omitReadAloudUi)
-    const body =
-      msg.revealComplete && msg.playbackStructured
-        ? getHospitalAddressCopy(locale)
-        : msg.displayText
+    const body = msg.revealComplete
+      ? getHospitalAddressCopy(locale)
+      : msg.displayText
     return (
       <AssistantMessageCard
         showAvatar={v3FocusBubble ? false : assistantShowsAvatar(msg.step)}
@@ -1659,7 +1715,7 @@ export function ChatbotModal({
       return (
         <div data-chat-user-anchor={m.id}>
           <UserMessageBubble>
-            <p>{m.text}</p>
+            <p>{localizedUserBubbleText(m, locale)}</p>
           </UserMessageBubble>
         </div>
       )
