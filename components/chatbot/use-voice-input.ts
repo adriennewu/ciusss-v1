@@ -22,6 +22,14 @@ export interface VoiceTranscriptMeta {
   detectedLocale: ChatLocale | null
 }
 
+/** Coarse classification used by the UI to pick a friendly, locale-specific error message. */
+export type VoiceErrorKind =
+  | "permission_denied"
+  | "no_microphone"
+  | "recording_interrupted"
+  | "no_speech_detected"
+  | "transcription_error"
+
 interface UseVoiceInputOptions {
   locale: ChatLocale
   onTranscript: (text: string, meta: VoiceTranscriptMeta) => void
@@ -40,6 +48,7 @@ interface UseVoiceInputOptions {
 export interface UseVoiceInputResult {
   isRecording: boolean
   errorMessage: string | null
+  errorKind: VoiceErrorKind | null
   micStream: MediaStream | null
   timelineVisualizationActive: boolean
   canUseVoice: boolean
@@ -117,17 +126,26 @@ function pickDualWebSpeechMerge(
   return { text: "", winner: null }
 }
 
-function formatUserMediaError(err: unknown): string {
+function formatUserMediaError(err: unknown): {
+  message: string
+  kind: VoiceErrorKind
+} {
   if (err && typeof err === "object" && "name" in err) {
     const n = (err as { name: string }).name
     if (n === "NotAllowedError" || n === "PermissionDeniedError") {
-      return "Microphone access was denied."
+      return {
+        message: "Microphone access was denied.",
+        kind: "permission_denied",
+      }
     }
     if (n === "NotFoundError") {
-      return "No microphone was found."
+      return { message: "No microphone was found.", kind: "no_microphone" }
     }
   }
-  return "Could not access the microphone."
+  return {
+    message: "Could not access the microphone.",
+    kind: "permission_denied",
+  }
 }
 
 /**
@@ -170,10 +188,24 @@ export function useVoiceInput({
   messages,
 }: UseVoiceInputOptions): UseVoiceInputResult {
   const [isRecording, setIsRecording] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [errorMessage, setErrorMessageRaw] = useState<string | null>(null)
+  const [errorKind, setErrorKind] = useState<VoiceErrorKind | null>(null)
   const [micStream, setMicStream] = useState<MediaStream | null>(null)
   const [timelineVisualizationActive, setTimelineVisualizationActive] =
     useState(false)
+
+  const setError = useCallback(
+    (kind: VoiceErrorKind, message: string) => {
+      setErrorKind(kind)
+      setErrorMessageRaw(message)
+    },
+    []
+  )
+
+  const clearErrorState = useCallback(() => {
+    setErrorKind(null)
+    setErrorMessageRaw(null)
+  }, [])
 
   const primaryRecognitionRef = useRef<SpeechRecognition | null>(null)
   const secondaryRecognitionRef = useRef<SpeechRecognition | null>(null)
@@ -301,21 +333,22 @@ export function useVoiceInput({
         detectedLocale,
       })
     } else {
-      setErrorMessage(messages.voiceWebSpeechNoMatch)
+      setError("no_speech_detected", messages.voiceWebSpeechNoMatch)
     }
   }, [
     clearConfirmSafetyTimeout,
     clearPostEndTimerOnly,
     detachRecognition,
     messages.voiceWebSpeechNoMatch,
+    setError,
     tearDownAudio,
   ])
 
   const submitMediaTranscription = useCallback(
     async (blob: Blob, sessionId: number) => {
-      const fail = (msg: string) => {
+      const fail = (kind: VoiceErrorKind, msg: string) => {
         if (sessionId === mediaSessionIdRef.current) {
-          setErrorMessage(msg)
+          setError(kind, msg)
         }
         onAwaitingServerTranscriptRef.current?.(false)
         setIsRecording(false)
@@ -328,7 +361,7 @@ export function useVoiceInput({
       }
 
       if (blob.size < 32) {
-        fail(messages.recordingTooShort)
+        fail("recording_interrupted", messages.recordingTooShort)
         return
       }
 
@@ -361,7 +394,7 @@ export function useVoiceInput({
               raw.slice(0, 200)
             )
           }
-          fail(messages.serverTranscriptionFailed)
+          fail("transcription_error", messages.serverTranscriptionFailed)
           return
         }
 
@@ -371,12 +404,12 @@ export function useVoiceInput({
         }
 
         if (res.status === 503 && data.error === "missing_api_key") {
-          fail(messages.serverNotConfigured)
+          fail("transcription_error", messages.serverNotConfigured)
           return
         }
 
         if (res.status === 400 && data.error === "file_too_small") {
-          fail(messages.recordingTooShort)
+          fail("recording_interrupted", messages.recordingTooShort)
           return
         }
 
@@ -388,13 +421,13 @@ export function useVoiceInput({
           ) {
             console.error("[transcribe]", res.status, data.detail)
           }
-          fail(messages.serverTranscriptionFailed)
+          fail("transcription_error", messages.serverTranscriptionFailed)
           return
         }
 
         const text = typeof data.text === "string" ? data.text.trim() : ""
         if (!text) {
-          fail(messages.noSpeechRecognized)
+          fail("no_speech_detected", messages.noSpeechRecognized)
           return
         }
 
@@ -415,7 +448,7 @@ export function useVoiceInput({
           onAwaitingServerTranscriptRef.current?.(false)
           return
         }
-        fail(messages.serverTranscriptionFailed)
+        fail("transcription_error", messages.serverTranscriptionFailed)
       }
     },
     [
@@ -424,6 +457,7 @@ export function useVoiceInput({
       messages.recordingTooShort,
       messages.serverNotConfigured,
       messages.serverTranscriptionFailed,
+      setError,
       tearDownAudio,
     ]
   )
@@ -434,7 +468,10 @@ export function useVoiceInput({
     unexpectedWebSpeechEndHandledRef.current = false
     const Ctor = getSpeechRecognitionConstructor()
     if (!Ctor) {
-      setErrorMessage("Speech recognition is not supported in this browser.")
+      setError(
+        "no_microphone",
+        "Speech recognition is not supported in this browser."
+      )
       engineRef.current = null
       return
     }
@@ -445,7 +482,8 @@ export function useVoiceInput({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (e) {
-      setErrorMessage(formatUserMediaError(e))
+      const um = formatUserMediaError(e)
+      setError(um.kind, um.message)
       engineRef.current = null
       return
     }
@@ -462,7 +500,7 @@ export function useVoiceInput({
       }, POST_END_TEXT_FLUSH_MS)
     }
 
-    const fatalSpeechError = (message: string) => {
+    const fatalSpeechError = (kind: VoiceErrorKind, message: string) => {
       unexpectedWebSpeechEndHandledRef.current = true
       invalidatePendingSpeechFlush()
       pendingConfirmRef.current = false
@@ -480,7 +518,7 @@ export function useVoiceInput({
       tearDownAudio()
       setIsRecording(false)
       engineRef.current = null
-      setErrorMessage(message)
+      setError(kind, message)
     }
 
     const detachOneEngineSilently = (rec: SpeechRecognition | null) => {
@@ -568,11 +606,17 @@ export function useVoiceInput({
           removeEngineAfterNonFatalError(rec, slot)
           return
         }
-        const msg =
-          event.error === "not-allowed"
-            ? "Microphone or speech recognition permission was denied."
-            : `Speech recognition error: ${event.error}.`
-        fatalSpeechError(msg)
+        if (event.error === "not-allowed") {
+          fatalSpeechError(
+            "permission_denied",
+            "Microphone or speech recognition permission was denied."
+          )
+          return
+        }
+        fatalSpeechError(
+          "transcription_error",
+          `Speech recognition error: ${event.error}.`
+        )
       }
       rec.onend = () => {
         onEngineEnded(rec, slot)
@@ -607,7 +651,7 @@ export function useVoiceInput({
         recSecondary.start()
       } catch {
         secondaryRecognitionRef.current = null
-        setErrorMessage("Could not start speech recognition.")
+        setError("recording_interrupted", "Could not start speech recognition.")
         detachRecognition()
         tearDownAudio()
         engineRef.current = null
@@ -625,7 +669,7 @@ export function useVoiceInput({
       try {
         recPrimary.start()
       } catch {
-        setErrorMessage("Could not start speech recognition.")
+        setError("recording_interrupted", "Could not start speech recognition.")
         detachRecognition()
         tearDownAudio()
         engineRef.current = null
@@ -641,12 +685,13 @@ export function useVoiceInput({
     invalidatePendingSpeechFlush,
     locale,
     mergedFinalizeSpeechConfirmFlush,
+    setError,
     tearDownAudio,
   ])
 
   const beginMediaRecorderSession = useCallback(async () => {
     if (typeof MediaRecorder === "undefined") {
-      setErrorMessage("Recording is not supported in this browser.")
+      setError("no_microphone", "Recording is not supported in this browser.")
       return
     }
 
@@ -658,7 +703,8 @@ export function useVoiceInput({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (e) {
-      setErrorMessage(formatUserMediaError(e))
+      const um = formatUserMediaError(e)
+      setError(um.kind, um.message)
       engineRef.current = null
       return
     }
@@ -674,7 +720,7 @@ export function useVoiceInput({
         ? new MediaRecorder(stream, { mimeType: mime })
         : new MediaRecorder(stream)
     } catch {
-      setErrorMessage("Could not start audio recording.")
+      setError("recording_interrupted", "Could not start audio recording.")
       tearDownAudio()
       engineRef.current = null
       return
@@ -689,7 +735,7 @@ export function useVoiceInput({
     recorder.onerror = () => {
       if (mediaRecorderRef.current !== recorder) return
       mediaRecorderRef.current = null
-      setErrorMessage(messages.serverTranscriptionFailed)
+      setError("transcription_error", messages.serverTranscriptionFailed)
       tearDownAudio()
       setIsRecording(false)
       engineRef.current = null
@@ -723,7 +769,7 @@ export function useVoiceInput({
     try {
       recorder.start(250)
     } catch {
-      setErrorMessage("Could not start audio recording.")
+      setError("recording_interrupted", "Could not start audio recording.")
       mediaRecorderRef.current = null
       tearDownAudio()
       engineRef.current = null
@@ -732,10 +778,15 @@ export function useVoiceInput({
 
     setIsRecording(true)
     setTimelineVisualizationActive(true)
-  }, [messages.serverTranscriptionFailed, submitMediaTranscription, tearDownAudio])
+  }, [
+    messages.serverTranscriptionFailed,
+    setError,
+    submitMediaTranscription,
+    tearDownAudio,
+  ])
 
   const beginSession = useCallback(async () => {
-    setErrorMessage(null)
+    clearErrorState()
     primaryFinalAccRef.current = ""
     secondaryFinalAccRef.current = ""
     primaryLiveRef.current = ""
@@ -748,7 +799,7 @@ export function useVoiceInput({
     } else {
       await beginWebSpeechSession()
     }
-  }, [beginMediaRecorderSession, beginWebSpeechSession])
+  }, [beginMediaRecorderSession, beginWebSpeechSession, clearErrorState])
 
   const hardStopWithoutConfirm = useCallback(() => {
     invalidatePendingSpeechFlush()
@@ -788,13 +839,13 @@ export function useVoiceInput({
 
   const startRecording = useCallback(async () => {
     if (!canUseVoice) {
-      setErrorMessage("Voice input is not available in this environment.")
+      setError("no_microphone", "Voice input is not available in this environment.")
       return
     }
     hardStopWithoutConfirm()
     speechFlushGenRef.current += 1
     await beginSession()
-  }, [beginSession, canUseVoice, hardStopWithoutConfirm])
+  }, [beginSession, canUseVoice, hardStopWithoutConfirm, setError])
 
   const cancelRecording = useCallback(() => {
     hardStopWithoutConfirm()
@@ -804,7 +855,7 @@ export function useVoiceInput({
     if (engineRef.current === "media") {
       const mr = mediaRecorderRef.current
       if (!mr || mr.state === "inactive") {
-        setErrorMessage(messages.serverTranscriptionFailed)
+        setError("transcription_error", messages.serverTranscriptionFailed)
         hardStopWithoutConfirm()
         return
       }
@@ -822,7 +873,7 @@ export function useVoiceInput({
       } catch {
         pendingConfirmRef.current = false
         onAwaitingServerTranscriptRef.current?.(false)
-        setErrorMessage("Could not finalize recording.")
+        setError("recording_interrupted", "Could not finalize recording.")
         hardStopWithoutConfirm()
       }
       return
@@ -842,7 +893,7 @@ export function useVoiceInput({
       recP?.stop()
     } catch {
       pendingConfirmRef.current = false
-      setErrorMessage("Could not finalize recording.")
+      setError("recording_interrupted", "Could not finalize recording.")
       hardStopWithoutConfirm()
       return
     }
@@ -850,7 +901,7 @@ export function useVoiceInput({
       recS?.stop()
     } catch {
       pendingConfirmRef.current = false
-      setErrorMessage("Could not finalize recording.")
+      setError("recording_interrupted", "Could not finalize recording.")
       hardStopWithoutConfirm()
       return
     }
@@ -869,9 +920,10 @@ export function useVoiceInput({
     hardStopWithoutConfirm,
     mergedFinalizeSpeechConfirmFlush,
     messages.serverTranscriptionFailed,
+    setError,
   ])
 
-  const clearError = useCallback(() => setErrorMessage(null), [])
+  const clearError = useCallback(() => clearErrorState(), [clearErrorState])
 
   useEffect(
     () => () => {
@@ -883,6 +935,7 @@ export function useVoiceInput({
   return {
     isRecording,
     errorMessage,
+    errorKind,
     micStream,
     timelineVisualizationActive,
     canUseVoice,

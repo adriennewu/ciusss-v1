@@ -1,4 +1,5 @@
 import type { SourcesPlacement } from "./prototype-config"
+import type { VoiceErrorKind } from "./use-voice-input"
 
 export type ChatLocale = "fr" | "en"
 
@@ -44,7 +45,10 @@ export interface ChatCopy {
   typingIndicatorAriaLabel: string
   closeAriaLabel: string
   betaDisclaimerBanner: string
+  /** @deprecated Kept for compatibility; `voiceErrorMessages[kind]` is what the modal renders. */
   voiceCaptureErrorBanner: string
+  /** Friendly, locale-specific copy keyed by VoiceErrorKind. */
+  voiceErrorMessages: Record<VoiceErrorKind, string>
   notificationBannerDismissAria: string
   /** Server-side STT (MediaRecorder / iOS path). */
   voiceServerTranscriptionFailed: string
@@ -67,6 +71,12 @@ export interface ChatCopy {
   composerVoiceModeAnnouncement: string
   /** When the primary action control is disabled (e.g. busy with empty draft). */
   composerPrimaryActionUnavailableAriaLabel: string
+  /** Visible (sr-only) label associated with the composer textarea — SGQRI 008 / WCAG 3.3.2. */
+  composerMessageLabel: string
+  /** Banner shown when a typed message fails because of a network or API error. */
+  networkErrorBanner: string
+  /** Banner shown when a typed message takes too long to get a response. */
+  timeoutErrorBanner: string
 }
 
 export function getSuggestionChipAriaLabel(
@@ -152,6 +162,18 @@ const fr: ChatCopy = {
     "Cet assistant est en version bêta. Les réponses peuvent comporter des erreurs.",
   voiceCaptureErrorBanner:
     "Nous n'avons pas pu capter votre audio. Veuillez vérifier que votre microphone est activé, puis réessayez.",
+  voiceErrorMessages: {
+    permission_denied:
+      "Nous n'avons pas pu accéder à votre micro. Vérifiez les paramètres de votre navigateur et autorisez l'accès au microphone, puis réessayez.",
+    no_microphone:
+      "Aucun microphone détecté sur votre appareil. Branchez un microphone ou utilisez le clavier pour écrire votre question.",
+    recording_interrupted:
+      "L'enregistrement a été interrompu. Appuyez à nouveau sur le microphone pour réessayer.",
+    no_speech_detected:
+      "Nous n'avons pas pu comprendre votre message vocal. Parlez clairement près du micro ou écrivez votre question à la place.",
+    transcription_error:
+      "Un problème est survenu lors de la transcription. Veuillez réessayer dans quelques instants.",
+  },
   notificationBannerDismissAria: "Fermer l'avis",
   voiceServerTranscriptionFailed:
     "La transcription n'a pas pu être effectuée. Réessayez.",
@@ -170,6 +192,11 @@ const fr: ChatCopy = {
   composerVoiceModeAnnouncement: "Mode enregistrement vocal actif",
   composerPrimaryActionUnavailableAriaLabel:
     "Action indisponible pour le moment, veuillez patienter",
+  composerMessageLabel: "Posez une question",
+  networkErrorBanner:
+    "Votre message n'a pas pu être envoyé. Vérifiez votre connexion Internet et réessayez.",
+  timeoutErrorBanner:
+    "La réponse prend plus de temps que prévu. Patientez quelques instants, puis réessayez.",
 }
 
 const en: ChatCopy = {
@@ -248,6 +275,18 @@ const en: ChatCopy = {
     "This assistant is in beta. Responses may contain errors.",
   voiceCaptureErrorBanner:
     "We couldn't capture your audio. Please check that your microphone is enabled, then try again.",
+  voiceErrorMessages: {
+    permission_denied:
+      "We couldn't access your microphone. Check your browser settings, allow microphone access, and try again.",
+    no_microphone:
+      "No microphone was detected on your device. Plug in a microphone or type your question instead.",
+    recording_interrupted:
+      "Your recording was interrupted. Tap the microphone again to try once more.",
+    no_speech_detected:
+      "We couldn't understand your voice message. Try speaking clearly near your microphone, or type your question instead.",
+    transcription_error:
+      "Something went wrong while transcribing your message. Please wait a moment and try again.",
+  },
   notificationBannerDismissAria: "Dismiss notice",
   voiceServerTranscriptionFailed:
     "Transcription could not be completed. Please try again.",
@@ -265,6 +304,11 @@ const en: ChatCopy = {
   composerVoiceModeAnnouncement: "Voice recording mode active",
   composerPrimaryActionUnavailableAriaLabel:
     "Action unavailable right now, please wait",
+  composerMessageLabel: "Ask a question",
+  networkErrorBanner:
+    "Your message couldn't be sent. Check your internet connection and try again.",
+  timeoutErrorBanner:
+    "The response is taking longer than expected. Please wait a moment and try again.",
 }
 
 export function getChatCopy(locale: ChatLocale): ChatCopy {

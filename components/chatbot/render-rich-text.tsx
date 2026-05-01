@@ -194,7 +194,7 @@ export function RichParagraph({
   className?: string
 }) {
   return (
-    <p className={cn("text-[#11161f] leading-relaxed", className)}>
+    <p className={cn("text-foreground leading-relaxed", className)}>
       {renderWithBold(text, "p")}
     </p>
   )

@@ -33,7 +33,7 @@ function TranscriptionLoadingLabel({ text }: { text: string }) {
     <div className="flex min-w-0 items-baseline gap-0.5 text-sm text-muted-foreground">
       <span>{text.replace(/\u2026$/, "")}</span>
       <span
-        className="inline-block animate-pulse font-normal text-muted-foreground"
+        className="inline-block motion-safe:animate-pulse font-normal text-muted-foreground"
         aria-hidden
       >
         …
@@ -48,8 +48,16 @@ export interface ComposerProps {
   onSubmit: () => void
   placeholder?: string
   transcriptionLoadingPlaceholder?: string
-  /** Accessible name for the message field (SGQRI: not placeholder alone). */
-  inputAriaLabel: string
+  /**
+   * Visible (rendered `sr-only`) label associated with the textarea via `<label htmlFor>`.
+   * Required for SGQRI 008 / WCAG 3.3.2 — placeholder text alone is not a label.
+   */
+  messageLabel: string
+  /**
+   * @deprecated Superseded by `messageLabel`. Kept so callers can pass a longer accessible
+   * description if they wish; otherwise the visible-but-hidden label is the field's name.
+   */
+  inputAriaLabel?: string
   sendAriaLabel: string
   micAriaLabel: string
   /** When the visible mic or send control is disabled (e.g. busy). */
@@ -78,6 +86,7 @@ export function Composer({
   onSubmit,
   placeholder = "Posez votre question...",
   transcriptionLoadingPlaceholder = "Transcription en cours…",
+  messageLabel,
   inputAriaLabel,
   sendAriaLabel,
   micAriaLabel,
@@ -199,6 +208,9 @@ export function Composer({
               }}
             >
               <div className="relative flex min-h-[36px] min-w-0 flex-1 flex-col justify-center">
+                <label htmlFor="chat-composer-message" className="sr-only">
+                  {messageLabel}
+                </label>
                 <textarea
                   ref={textareaRef}
                   id="chat-composer-message"
@@ -208,7 +220,9 @@ export function Composer({
                   onInput={syncTextareaHeight}
                   onKeyDown={handleTextareaKeyDown}
                   placeholder={isVoiceTranscribing ? "" : placeholder}
-                  aria-label={inputAriaLabel}
+                  aria-describedby={
+                    inputAriaLabel ? "chat-composer-desc" : undefined
+                  }
                   className={cn(
                     "box-border max-h-[8rem] min-h-[36px] w-full resize-none overflow-y-auto bg-transparent py-2 text-sm leading-5 text-card-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                     isVoiceTranscribing &&
@@ -217,6 +231,11 @@ export function Composer({
                   disabled={inputLocked}
                   autoComplete="off"
                 />
+                {inputAriaLabel ? (
+                  <span id="chat-composer-desc" className="sr-only">
+                    {inputAriaLabel}
+                  </span>
+                ) : null}
                 {isVoiceTranscribing ? (
                   <div
                     className="pointer-events-none absolute inset-0 flex items-center"

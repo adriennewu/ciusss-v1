@@ -312,6 +312,7 @@ export function ChatbotModal({
   const {
     isRecording,
     errorMessage: voiceError,
+    errorKind: voiceErrorKind,
     micStream,
     timelineVisualizationActive,
     startRecording,
@@ -335,6 +336,15 @@ export function ChatbotModal({
   const betaBannerMeasureRef = useRef<HTMLDivElement>(null)
   const [speechErrorBannerDismissed, setSpeechErrorBannerDismissed] =
     useState(false)
+
+  /**
+   * Prototype-only banner state for typed-message failures.
+   * Magic words `/network` and `/timeout` (also `/erreur-reseau` and `/delai`) flip this on
+   * so QA can verify the banner in both locales without a real backend.
+   */
+  const [submitError, setSubmitError] = useState<null | "network" | "timeout">(
+    null
+  )
 
   useEffect(() => {
     if (voiceError != null) {
@@ -563,7 +573,23 @@ export function ChatbotModal({
   const handleSend = () => {
     const t = draft.trim()
     if (!t) return
+
+    const lower = t.toLowerCase()
+    if (lower === "/network" || lower === "/erreur-reseau") {
+      setSubmitError("network")
+      setDraft("")
+      lastSubmitSourceRef.current = "keyboard"
+      return
+    }
+    if (lower === "/timeout" || lower === "/delai") {
+      setSubmitError("timeout")
+      setDraft("")
+      lastSubmitSourceRef.current = "keyboard"
+      return
+    }
+
     setScrollDownSuppressed(true)
+    setSubmitError(null)
     const submitSource = lastSubmitSourceRef.current
     onManualSubmit(t, { submitSource })
     setDraft("")
@@ -1672,6 +1698,7 @@ export function ChatbotModal({
   return (
     <div
       ref={modalRootRef}
+      lang={locale}
       className="flex h-[100dvh] min-h-0 w-full max-w-none flex-col overflow-hidden rounded-none border-0 bg-background shadow-none md:h-[min(96dvh,calc(100dvh-3rem))] md:max-w-4xl md:rounded-2xl md:border md:border-border md:shadow-2xl"
     >
       <ChatHeader
@@ -1827,10 +1854,24 @@ export function ChatbotModal({
       </div>
 
       <div className="flex w-full min-w-0 flex-col border-t border-border bg-white shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-3">
+        {submitError != null ? (
+          <NotificationBanner
+            variant="error"
+            message={
+              submitError === "network"
+                ? copy.networkErrorBanner
+                : copy.timeoutErrorBanner
+            }
+            dismissAriaLabel={copy.notificationBannerDismissAria}
+            onDismiss={() => setSubmitError(null)}
+          />
+        ) : null}
         {voiceError != null && !speechErrorBannerDismissed ? (
           <NotificationBanner
             variant="error"
-            message={copy.voiceCaptureErrorBanner}
+            message={
+              copy.voiceErrorMessages[voiceErrorKind ?? "transcription_error"]
+            }
             dismissAriaLabel={copy.notificationBannerDismissAria}
             onDismiss={() => setSpeechErrorBannerDismissed(true)}
           />
@@ -1858,6 +1899,7 @@ export function ChatbotModal({
               transcriptionLoadingPlaceholder={
                 copy.composerTranscriptionLoadingPlaceholder
               }
+              messageLabel={copy.composerMessageLabel}
               inputAriaLabel={copy.composerInputAriaLabel}
               sendAriaLabel={copy.composerSendLabel}
               micAriaLabel={copy.composerMicAriaLabel}

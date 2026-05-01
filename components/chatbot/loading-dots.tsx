@@ -38,15 +38,15 @@ export function LoadingDots({
       aria-hidden
     >
       <span
-        className={cn("w-1.5 h-1.5 rounded-full animate-bounce", v.dot)}
+        className={cn("w-1.5 h-1.5 rounded-full motion-safe:animate-bounce", v.dot)}
         style={{ animationDelay: "0ms" }}
       />
       <span
-        className={cn("w-1.5 h-1.5 rounded-full animate-bounce", v.dot)}
+        className={cn("w-1.5 h-1.5 rounded-full motion-safe:animate-bounce", v.dot)}
         style={{ animationDelay: "150ms" }}
       />
       <span
-        className={cn("w-1.5 h-1.5 rounded-full animate-bounce", v.dot)}
+        className={cn("w-1.5 h-1.5 rounded-full motion-safe:animate-bounce", v.dot)}
         style={{ animationDelay: "300ms" }}
       />
     </div>

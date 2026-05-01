@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" data-prototype-primary="purple">
+    <html lang="fr" data-prototype-primary="purple">
       <body className="font-sans antialiased">
         {children}
         <Analytics />

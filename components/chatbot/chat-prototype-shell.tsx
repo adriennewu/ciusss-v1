@@ -5,11 +5,9 @@ import { cn } from "@/lib/utils"
 import { ChatbotModal } from "./chatbot-modal"
 import { ChatLauncherFab } from "./chat-launcher-fab"
 import { ChatLauncherTooltip } from "./chat-launcher-tooltip"
-import {
-  CHAT_LAUNCHER_TOOLTIP_DISMISS_ARIA,
-  CHAT_LAUNCHER_TOOLTIP_FR,
-} from "./chat-launcher-copy"
+import { getChatLauncherTooltipCopy } from "./chat-launcher-copy"
 import { getChatCopy, type ChatLocale } from "./chatbot-copy"
+import { useWebsiteLocale } from "@/lib/use-website-locale"
 import type { AudioVariantId, SourceVariantId } from "./prototype-config"
 
 export interface ChatPrototypeShellProps {
@@ -33,6 +31,9 @@ export function ChatPrototypeShell({
   const [isChatOpen, setIsChatOpen] = useState(false)
   const launcherFabRef = useRef<HTMLButtonElement>(null)
   const copy = getChatCopy(locale)
+  /** Mirrors the host website (e.g. ciussscentreouest.ca) lang — independent of the widget toggle. */
+  const websiteLocale = useWebsiteLocale("fr")
+  const launcherTooltipCopy = getChatLauncherTooltipCopy(websiteLocale)
   const [launcherTooltipDismissed, setLauncherTooltipDismissed] =
     useState(false)
   const [delayReady, setDelayReady] = useState(false)
@@ -99,6 +100,7 @@ export function ChatPrototypeShell({
 
       {!isChatOpen && (
         <div
+          lang={websiteLocale}
           className={cn(
             "fixed z-[35] flex flex-col items-end gap-2",
             "bottom-[max(1rem,env(safe-area-inset-bottom))]",
@@ -107,8 +109,8 @@ export function ChatPrototypeShell({
         >
           {showLauncherTooltip && (
             <ChatLauncherTooltip
-              message={CHAT_LAUNCHER_TOOLTIP_FR}
-              dismissAriaLabel={CHAT_LAUNCHER_TOOLTIP_DISMISS_ARIA}
+              message={launcherTooltipCopy.message}
+              dismissAriaLabel={launcherTooltipCopy.dismissAriaLabel}
               onDismiss={handleTooltipDismiss}
             />
           )}
