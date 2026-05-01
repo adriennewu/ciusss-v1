@@ -41,10 +41,6 @@ export interface ChatCopy {
   composerTranscriptionLoadingPlaceholder: string
   voiceRecordingCancelAriaLabel: string
   voiceRecordingConfirmAriaLabel: string
-  /** Visible label next to the stop (cancel) icon while recording. */
-  voiceRecordingStopLabel: string
-  /** Visible label next to the confirm icon while recording. */
-  voiceRecordingConfirmLabel: string
   typingIndicatorAriaLabel: string
   closeAriaLabel: string
   betaDisclaimerBanner: string
@@ -150,8 +146,6 @@ const fr: ChatCopy = {
   composerTranscriptionLoadingPlaceholder: "Transcription en cours…",
   voiceRecordingCancelAriaLabel: "Annuler l'enregistrement",
   voiceRecordingConfirmAriaLabel: "Confirmer la dictée",
-  voiceRecordingStopLabel: "Arrêter",
-  voiceRecordingConfirmLabel: "Confirmer",
   typingIndicatorAriaLabel: "L'assistant est en train d'écrire…",
   closeAriaLabel: "Fermer le clavardage",
   betaDisclaimerBanner:
@@ -248,8 +242,6 @@ const en: ChatCopy = {
   composerTranscriptionLoadingPlaceholder: "Transcription in progress…",
   voiceRecordingCancelAriaLabel: "Cancel recording",
   voiceRecordingConfirmAriaLabel: "Confirm dictation",
-  voiceRecordingStopLabel: "Stop",
-  voiceRecordingConfirmLabel: "Confirm",
   typingIndicatorAriaLabel: "Assistant is typing…",
   closeAriaLabel: "Close chat",
   betaDisclaimerBanner:

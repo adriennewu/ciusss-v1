@@ -6,16 +6,23 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
-  useState,
   type KeyboardEvent,
 } from "react"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { RecordingTimeline } from "./recording-timeline"
 
+/** Middle slot in recording row: timeline + chrome. */
 const inputShellBaseClass =
   "flex min-w-0 flex-1 items-end gap-2 rounded-2xl border border-border bg-card px-3 shadow-sm"
-/** Collapsed row ≈ 60px tall: 1px borders + 11px×2 padding + 36px input track. */
-const inputShellClass = cn(inputShellBaseClass, "py-[11px]")
+const inputShellCardClass =
+  "rounded-2xl border border-border bg-card px-3 shadow-sm"
+/** Collapsed row ≈ 60px tall: 1px borders + 11px×2 padding + 36px input track. Textarea + trailing 36×36 action inside shell. */
+const inputShellClass = cn(
+  "flex min-w-0 flex-1 items-end gap-2 sm:gap-3",
+  inputShellCardClass,
+  "py-[11px]",
+)
 const inputShellRecordingClass = cn(inputShellBaseClass, "py-3")
 
 /** Matches footer send/mic (`h-9`); `py-2` + `leading-5` + `text-sm` ≈ 36px border-box. Floors auto-grow when `scrollHeight` is 0. */
@@ -45,16 +52,14 @@ export interface ComposerProps {
   inputAriaLabel: string
   sendAriaLabel: string
   micAriaLabel: string
-  /** When the combined primary control is disabled (e.g. busy, empty draft). */
+  /** When the visible mic or send control is disabled (e.g. busy). */
   primaryActionUnavailableAriaLabel: string
-  /** Optional polite announcement when switching to send mode (single control). */
+  /** Optional polite announcement when the draft becomes non-empty (send visible). */
   sendModeAnnouncement?: string
-  /** Optional polite announcement when switching to voice mode (single control). */
+  /** Optional polite announcement when the draft becomes empty (mic visible). */
   voiceModeAnnouncement?: string
   cancelRecordingAriaLabel?: string
   confirmRecordingAriaLabel?: string
-  stopRecordingLabel?: string
-  confirmRecordingLabel?: string
   disabled?: boolean
   className?: string
   isRecording: boolean
@@ -81,8 +86,6 @@ export function Composer({
   voiceModeAnnouncement,
   cancelRecordingAriaLabel = "Annuler l'enregistrement",
   confirmRecordingAriaLabel = "Confirmer la dictée",
-  stopRecordingLabel = "Arrêter",
-  confirmRecordingLabel = "Confirmer",
   disabled = false,
   className,
   isRecording,
@@ -95,23 +98,12 @@ export function Composer({
   onRecordingConfirm,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const confirmRecordingBtnRef = useRef<HTMLButtonElement | null>(null)
   const modeAnnouncerRef = useRef<HTMLDivElement | null>(null)
   const prevSendModeRef = useRef<boolean | null>(null)
-  /** Outer width of the confirm control (icon + label); stop uses the same width. */
-  const [recordingActionBtnWidthPx, setRecordingActionBtnWidthPx] = useState<
-    number | null
-  >(null)
   const inputLocked = disabled || isVoiceTranscribing
   const hasDraftText = value.trim().length > 0
   const canSend = !inputLocked && hasDraftText
   const canMic = !inputLocked && !micDisabled && !hasDraftText
-  const primaryDisabled = !canSend && !canMic
-  const primaryAriaLabel = primaryDisabled
-    ? primaryActionUnavailableAriaLabel
-    : canSend
-      ? sendAriaLabel
-      : micAriaLabel
 
   const syncTextareaHeight = useCallback(() => {
     const el = textareaRef.current
@@ -129,25 +121,7 @@ export function Composer({
     syncTextareaHeight()
   }, [value, isVoiceTranscribing, syncTextareaHeight])
 
-  useLayoutEffect(() => {
-    if (!isRecording) {
-      setRecordingActionBtnWidthPx(null)
-      return
-    }
-    const node = confirmRecordingBtnRef.current
-    if (!node) return
-    const read = () => {
-      setRecordingActionBtnWidthPx(
-        Math.ceil(node.getBoundingClientRect().width),
-      )
-    }
-    read()
-    const ro = new ResizeObserver(read)
-    ro.observe(node)
-    return () => ro.disconnect()
-  }, [isRecording, confirmRecordingLabel])
-
-  const sendMode = canSend
+  const sendMode = hasDraftText
   useEffect(() => {
     if (
       isRecording ||
@@ -174,16 +148,6 @@ export function Composer({
     }
   }
 
-  const handlePrimaryClick = () => {
-    if (canSend) {
-      onSubmit()
-      return
-    }
-    if (canMic) {
-      void onMicClick()
-    }
-  }
-
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div
@@ -203,20 +167,11 @@ export function Composer({
           <>
             <button
               type="button"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[14px] border border-destructive/35 bg-destructive/15 px-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 focus-visible:ring-offset-2"
-              style={
-                recordingActionBtnWidthPx != null
-                  ? {
-                      width: recordingActionBtnWidthPx,
-                      minWidth: recordingActionBtnWidthPx,
-                    }
-                  : undefined
-              }
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-[14px] border border-destructive/35 bg-destructive/15 text-destructive transition-colors hover:bg-destructive/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 focus-visible:ring-offset-2"
               aria-label={cancelRecordingAriaLabel}
               onClick={onRecordingCancel}
             >
               <X className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
-              <span className="truncate">{stopRecordingLabel}</span>
             </button>
             <div className={cn(inputShellRecordingClass, "min-h-[52px]")} aria-hidden>
               <RecordingTimeline
@@ -226,28 +181,18 @@ export function Composer({
               />
             </div>
             <button
-              ref={confirmRecordingBtnRef}
               type="button"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-primary px-2.5 text-sm font-medium text-primary-foreground shadow-md transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              style={
-                recordingActionBtnWidthPx != null
-                  ? {
-                      width: recordingActionBtnWidthPx,
-                      minWidth: recordingActionBtnWidthPx,
-                    }
-                  : undefined
-              }
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-[14px] bg-primary text-primary-foreground shadow-md transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label={confirmRecordingAriaLabel}
               onClick={onRecordingConfirm}
             >
               <Check className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
-              <span className="truncate">{confirmRecordingLabel}</span>
             </button>
           </>
         ) : (
-          <div className={cn(inputShellClass, "flex min-w-0 flex-1 gap-2 sm:gap-3")}>
+          <div className={inputShellClass}>
             <form
-              className="flex min-w-0 flex-1 items-end gap-2"
+              className="flex min-h-0 min-w-0 flex-1 items-end"
               onSubmit={(e) => {
                 e.preventDefault()
                 if (canSend) onSubmit()
@@ -284,19 +229,37 @@ export function Composer({
                 ) : null}
               </div>
             </form>
-            <button
-              type="button"
-              onClick={handlePrimaryClick}
-              disabled={primaryDisabled}
-              aria-label={primaryAriaLabel}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50"
-            >
-              {canSend ? (
+            <div className="relative size-9 shrink-0 self-end">
+              <Button
+                type="button"
+                variant="primaryMuted"
+                onClick={() => {
+                  void onMicClick()
+                }}
+                disabled={!canMic}
+                aria-label={
+                  canMic ? micAriaLabel : primaryActionUnavailableAriaLabel
+                }
+                aria-hidden={hasDraftText}
+                style={{ display: hasDraftText ? "none" : "flex" }}
+                className="absolute inset-0 z-[1] size-9 shrink-0 rounded-[14px] !p-0 gap-0 has-[>svg]:p-0"
+              >
+                <Mic className="h-4 w-4 shrink-0" aria-hidden />
+              </Button>
+              <button
+                type="button"
+                onClick={() => onSubmit()}
+                disabled={!canSend}
+                aria-label={
+                  canSend ? sendAriaLabel : primaryActionUnavailableAriaLabel
+                }
+                aria-hidden={!hasDraftText}
+                style={{ display: hasDraftText ? "flex" : "none" }}
+                className="absolute inset-0 z-[1] flex size-9 shrink-0 items-center justify-center rounded-[14px] bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50"
+              >
                 <ArrowUp className="h-4 w-4" aria-hidden />
-              ) : (
-                <Mic className="h-4 w-4" aria-hidden />
-              )}
-            </button>
+              </button>
+            </div>
           </div>
         )}
       </div>

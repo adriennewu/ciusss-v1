@@ -589,6 +589,12 @@ export function ChatbotModal({
   const readAloudOffsetMsRef = useRef(0)
   const readAloudAnchorMsRef = useRef<number | null>(null)
   const readAloudEstimateMsRef = useRef(8000)
+  const readAloudFullTextRef = useRef<string | null>(null)
+  const readAloudSeekResumePausedRef = useRef(false)
+  const readAloudStatusRef = useRef(readAloudStatus)
+  const readAloudActiveIdRef = useRef(readAloudActiveId)
+  readAloudStatusRef.current = readAloudStatus
+  readAloudActiveIdRef.current = readAloudActiveId
 
   const isV3FocusLayout =
     isFullScreenAudioVariant(audioVariant) &&
@@ -658,6 +664,7 @@ export function ChatbotModal({
   const clearReadAloudUi = useCallback(() => {
     readAloudOffsetMsRef.current = 0
     readAloudAnchorMsRef.current = null
+    readAloudFullTextRef.current = null
     setReadAloudActiveId(null)
     setReadAloudStatus("idle")
   }, [])
@@ -670,27 +677,22 @@ export function ChatbotModal({
     clearReadAloudUi()
   }, [clearReadAloudUi])
 
-  const startReadAloud = useCallback(
-    (messageId: string, text: string) => {
-      if (typeof window === "undefined" || !text.trim()) return
-      window.speechSynthesis.cancel()
-      utteranceGenRef.current++
-      const myGen = utteranceGenRef.current
-      let hasStarted = false
-
-      readAloudEstimateMsRef.current = estimateSpeechDurationMs(text, locale)
-      readAloudOffsetMsRef.current = 0
-      readAloudAnchorMsRef.current = null
+  const beginReadAloudSynthesis = useCallback(
+    (
+      messageId: string,
+      speakText: string,
+      myGen: number,
+      timeline: "fromStart" | "fromSeek"
+    ) => {
+      if (typeof window === "undefined") return
+      const trimmed = speakText.trim()
+      if (!trimmed) return
 
       const lang = getSpeechBcp47ForChatLocale(locale)
-      const chunks = splitTextIntoSpeechChunks(text)
+      const chunks = splitTextIntoSpeechChunks(trimmed)
       if (chunks.length === 0) return
 
-      if (isFullScreenAudioVariant(audioVariant)) {
-        setReadAloudActiveId(messageId)
-        setReadAloudStatus("playing")
-        setReadAloudTick((t) => t + 1)
-      }
+      let hasStarted = false
 
       const speakNow = () => {
         if (hasStarted || utteranceGenRef.current !== myGen) return
@@ -744,7 +746,28 @@ export function ChatbotModal({
           }
           u.onstart = () => {
             resumeSynth()
-            if (index === 0 && isFullScreenAudioVariant(audioVariant)) {
+            if (readAloudSeekResumePausedRef.current) {
+              readAloudSeekResumePausedRef.current = false
+              readAloudAnchorMsRef.current = null
+              try {
+                synth.pause()
+              } catch {
+                /* ignore */
+              }
+              setReadAloudStatus("paused")
+              setReadAloudTick((t) => t + 1)
+              return
+            }
+            if (timeline === "fromSeek" && index === 0) {
+              readAloudAnchorMsRef.current = Date.now()
+              setReadAloudTick((t) => t + 1)
+              return
+            }
+            if (
+              index === 0 &&
+              isFullScreenAudioVariant(audioVariant) &&
+              timeline === "fromStart"
+            ) {
               readAloudOffsetMsRef.current = 0
               readAloudAnchorMsRef.current = Date.now()
               setReadAloudTick((t) => t + 1)
@@ -762,7 +785,11 @@ export function ChatbotModal({
             if (utteranceGenRef.current !== myGen) return
             clearReadAloudUi()
           }
-          if (index === 0 && !isFullScreenAudioVariant(audioVariant)) {
+          if (
+            index === 0 &&
+            !isFullScreenAudioVariant(audioVariant) &&
+            timeline === "fromStart"
+          ) {
             setReadAloudActiveId(messageId)
             setReadAloudStatus("playing")
             readAloudOffsetMsRef.current = 0
@@ -823,6 +850,66 @@ export function ChatbotModal({
       }, 300)
     },
     [audioVariant, clearReadAloudUi, locale]
+  )
+
+  const startReadAloud = useCallback(
+    (messageId: string, text: string) => {
+      if (typeof window === "undefined" || !text.trim()) return
+      window.speechSynthesis.cancel()
+      utteranceGenRef.current++
+      const myGen = utteranceGenRef.current
+      readAloudSeekResumePausedRef.current = false
+
+      const full = text.trim()
+      readAloudFullTextRef.current = full
+      readAloudEstimateMsRef.current = estimateSpeechDurationMs(full, locale)
+      readAloudOffsetMsRef.current = 0
+      readAloudAnchorMsRef.current = null
+
+      if (isFullScreenAudioVariant(audioVariant)) {
+        setReadAloudActiveId(messageId)
+        setReadAloudStatus("playing")
+        setReadAloudTick((t) => t + 1)
+      }
+
+      beginReadAloudSynthesis(messageId, full, myGen, "fromStart")
+    },
+    [audioVariant, beginReadAloudSynthesis]
+  )
+
+  const seekReadAloud = useCallback(
+    (fraction: number) => {
+      if (typeof window === "undefined") return
+      const activeId = readAloudActiveIdRef.current
+      const status = readAloudStatusRef.current
+      if (activeId == null || status === "idle") return
+      const full = readAloudFullTextRef.current
+      if (full == null || !full.length) return
+
+      const f = Math.min(1, Math.max(0, fraction))
+      const idx = Math.min(full.length, Math.floor(f * full.length))
+      const remaining = full.slice(idx).trim()
+      if (idx >= full.length || !remaining.length) {
+        stopReadAloud()
+        return
+      }
+
+      const total = readAloudEstimateMsRef.current
+      readAloudOffsetMsRef.current = Math.min(total, f * total)
+      readAloudEstimateMsRef.current =
+        readAloudOffsetMsRef.current + estimateSpeechDurationMs(remaining, locale)
+      readAloudAnchorMsRef.current = null
+
+      window.speechSynthesis.cancel()
+      utteranceGenRef.current++
+      const myGen = utteranceGenRef.current
+
+      readAloudSeekResumePausedRef.current = status === "paused"
+
+      beginReadAloudSynthesis(activeId, remaining, myGen, "fromSeek")
+      setReadAloudTick((t) => t + 1)
+    },
+    [beginReadAloudSynthesis, stopReadAloud, locale]
   )
 
   const pauseReadAloud = useCallback(() => {
@@ -1012,12 +1099,20 @@ export function ChatbotModal({
           labels={readAloudV2Labels}
           progress={progress}
           remainingClock={remainingClock}
+          estimatedDurationMs={
+            isThisActive && mode !== "idle"
+              ? readAloudEstimateMsRef.current
+              : 0
+          }
           onStart={() => {
             if (plain) startReadAloud(msg.id, plain)
           }}
           onPause={pauseReadAloud}
           onResume={resumeReadAloud}
           onStop={stopReadAloud}
+          onSeekCommit={
+            isThisActive && mode !== "idle" ? seekReadAloud : undefined
+          }
         />
       )
     },
@@ -1034,6 +1129,7 @@ export function ChatbotModal({
       pauseReadAloud,
       resumeReadAloud,
       stopReadAloud,
+      seekReadAloud,
     ]
   )
 
@@ -1097,12 +1193,20 @@ export function ChatbotModal({
         labels={readAloudV2Labels}
         progress={progress}
         remainingClock={remainingClock}
+        estimatedDurationMs={
+          isThisActive && mode !== "idle"
+            ? readAloudEstimateMsRef.current
+            : 0
+        }
         onStart={() => {
           if (plain) startReadAloud(STATIC_GREETING_READ_ALOUD_ID, plain)
         }}
         onPause={pauseReadAloud}
         onResume={resumeReadAloud}
         onStop={stopReadAloud}
+        onSeekCommit={
+          isThisActive && mode !== "idle" ? seekReadAloud : undefined
+        }
       />
     )
   }, [
@@ -1115,6 +1219,7 @@ export function ChatbotModal({
     pauseReadAloud,
     resumeReadAloud,
     stopReadAloud,
+    seekReadAloud,
   ])
 
   const assistantReadAloudSlots = useCallback(
@@ -1737,10 +1842,12 @@ export function ChatbotModal({
               labels={readAloudV2Labels}
               progress={v3FocusReadAloudFooterMetrics.progress}
               remainingClock={v3FocusReadAloudFooterMetrics.remainingClock}
+              estimatedDurationMs={readAloudEstimateMsRef.current}
               onStart={() => {}}
               onPause={pauseReadAloud}
               onResume={resumeReadAloud}
               onStop={stopReadAloud}
+              onSeekCommit={seekReadAloud}
             />
           ) : (
             <Composer
@@ -1761,8 +1868,6 @@ export function ChatbotModal({
               voiceModeAnnouncement={copy.composerVoiceModeAnnouncement}
               cancelRecordingAriaLabel={copy.voiceRecordingCancelAriaLabel}
               confirmRecordingAriaLabel={copy.voiceRecordingConfirmAriaLabel}
-              stopRecordingLabel={copy.voiceRecordingStopLabel}
-              confirmRecordingLabel={copy.voiceRecordingConfirmLabel}
               disabled={conversationBusy || isVoiceTranscribing}
               isRecording={isRecording}
               isVoiceTranscribing={isVoiceTranscribing}
